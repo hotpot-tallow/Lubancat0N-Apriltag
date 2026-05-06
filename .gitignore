@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+camera_test.jpg
+config/*.json
+!config/example_config.json

@@ -1,0 +1,42 @@
+{
+  "camera": {
+    "device": 0,
+    "width": 640,
+    "height": 480,
+    "fps": 30,
+    "fx": 600.0,
+    "fy": 600.0,
+    "cx": 320.0,
+    "cy": 240.0
+  },
+  "apriltag": {
+    "family": "tag36h11",
+    "tag_sizes_m": {
+      "0": 0.5,
+      "1": 0.128,
+      "2": 0.03
+    },
+    "tag_priority": [2, 1, 0],
+    "quad_decimate": 2.0,
+    "quad_sigma": 0.0,
+    "refine_edges": 1,
+    "decode_sharpening": 0.25,
+    "max_hamming": 1,
+    "min_decision_margin": 20.0
+  },
+  "mavlink": {
+    "connection": "/dev/ttyS8",
+    "baud": 115200,
+    "source_system": 42,
+    "source_component": 191,
+    "target_num": 0,
+    "send_rate_hz": 20.0
+  },
+  "transform": {
+    "camera_to_body": [
+      [0.0, -1.0, 0.0],
+      [1.0, 0.0, 0.0],
+      [0.0, 0.0, 1.0]
+    ]
+  }
+}
