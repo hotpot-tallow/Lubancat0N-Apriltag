@@ -63,6 +63,9 @@ class NestedTagTracker:
                     TargetPose(
                         tag_id=tag_id,
                         tag_size_m=tag_size_m,
+                        corners=tuple(
+                            (float(point[0]), float(point[1])) for point in detection.corners
+                        ),
                         x_cam=x_cam,
                         y_cam=y_cam,
                         z_cam=z_cam,

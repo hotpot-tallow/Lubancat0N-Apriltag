@@ -9,12 +9,14 @@ import numpy as np
 
 Vector3 = Tuple[float, float, float]
 Matrix3 = Tuple[Tuple[float, float, float], ...]
+Point2 = Tuple[float, float]
 
 
 @dataclass(frozen=True)
 class TargetPose:
     tag_id: int
     tag_size_m: float
+    corners: Tuple[Point2, Point2, Point2, Point2]
     x_cam: float
     y_cam: float
     z_cam: float

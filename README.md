@@ -124,8 +124,18 @@ PYTHONPATH=src python tools/test_camera.py --config config/lubancat0n.json --hea
 
 ## 6. 测 AprilTag
 
+有桌面环境时直接运行，会弹出实时画面，画面左上角显示 FPS，识别到 tag 后会画出绿色边框、tag ID、坐标和距离：
+
 ```bash
 PYTHONPATH=src python tools/test_tags.py --config config/lubancat0n.json
+```
+
+按 `Esc` 或 `q` 退出。
+
+无桌面环境时使用：
+
+```bash
+PYTHONPATH=src python tools/test_tags.py --config config/lubancat0n.json --headless
 ```
 
 看到类似输出就说明识别和位姿估计通了：
