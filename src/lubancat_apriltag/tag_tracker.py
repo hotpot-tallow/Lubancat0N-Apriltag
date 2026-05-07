@@ -14,6 +14,12 @@ class NestedTagTracker:
 
     def __init__(self, config: AppConfig) -> None:
         self.config = config
+        self.last_stats = {
+            "raw_count": 0,
+            "accepted_count": 0,
+            "selected_tag_id": None,
+            "selected_size_m": None,
+        }
         tag_config = config.apriltag
         self.detector = Detector(
             families=tag_config.family,
@@ -31,6 +37,7 @@ class NestedTagTracker:
         detections = self.detector.detect(gray, estimate_tag_pose=False)
         selected = None
         selected_size = float("inf")
+        accepted_count = 0
 
         for detection in detections:
             tag_id = int(detection.tag_id)
@@ -41,6 +48,7 @@ class NestedTagTracker:
                 continue
             if float(detection.decision_margin) < self.config.apriltag.min_decision_margin:
                 continue
+            accepted_count += 1
             if selected is None:
                 selected = detection
                 selected_size = tag_size_m
@@ -52,6 +60,13 @@ class NestedTagTracker:
             if tag_size_m == selected_size and detection.decision_margin > selected.decision_margin:
                 selected = detection
                 selected_size = tag_size_m
+
+        self.last_stats = {
+            "raw_count": len(detections),
+            "accepted_count": accepted_count,
+            "selected_tag_id": int(selected.tag_id) if selected is not None else None,
+            "selected_size_m": selected_size if selected is not None else None,
+        }
 
         if selected is None:
             return None

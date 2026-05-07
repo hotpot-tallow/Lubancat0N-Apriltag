@@ -48,10 +48,10 @@ def estimate_pose_from_corners(
     half_size = tag_size_m / 2.0
     object_points = np.array(
         [
-            [-half_size, half_size, 0.0],
-            [half_size, half_size, 0.0],
-            [half_size, -half_size, 0.0],
             [-half_size, -half_size, 0.0],
+            [half_size, -half_size, 0.0],
+            [half_size, half_size, 0.0],
+            [-half_size, half_size, 0.0],
         ],
         dtype=np.float32,
     )

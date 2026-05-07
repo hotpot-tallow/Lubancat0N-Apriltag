@@ -9,6 +9,9 @@ from typing import Dict, Sequence, Tuple, Union
 @dataclass(frozen=True)
 class CameraConfig:
     device: Union[int, str]
+    backend: str
+    fourcc: str
+    buffer_size: int
     width: int
     height: int
     fps: int
@@ -72,6 +75,9 @@ def load_config(path: Union[str, Path]) -> AppConfig:
     return AppConfig(
         camera=CameraConfig(
             device=camera.get("device", 0),
+            backend=str(camera.get("backend", "v4l2")),
+            fourcc=str(camera.get("fourcc", "MJPG")),
+            buffer_size=int(camera.get("buffer_size", 1)),
             width=int(camera.get("width", 640)),
             height=int(camera.get("height", 480)),
             fps=int(camera.get("fps", 30)),
@@ -88,7 +94,7 @@ def load_config(path: Union[str, Path]) -> AppConfig:
             refine_edges=int(apriltag.get("refine_edges", 1)),
             decode_sharpening=float(apriltag.get("decode_sharpening", 0.25)),
             max_hamming=int(apriltag.get("max_hamming", 1)),
-            min_decision_margin=float(apriltag.get("min_decision_margin", 20.0)),
+            min_decision_margin=float(apriltag.get("min_decision_margin", 8.0)),
         ),
         mavlink=MavlinkConfig(
             connection=str(mavlink["connection"]),

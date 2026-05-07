@@ -1,6 +1,9 @@
 {
   "camera": {
     "device": 0,
+    "backend": "v4l2",
+    "fourcc": "MJPG",
+    "buffer_size": 1,
     "width": 640,
     "height": 480,
     "fps": 30,
@@ -21,7 +24,7 @@
     "refine_edges": 1,
     "decode_sharpening": 0.25,
     "max_hamming": 1,
-    "min_decision_margin": 20.0
+    "min_decision_margin": 8.0
   },
   "mavlink": {
     "connection": "/dev/ttyS8",

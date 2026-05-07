@@ -130,6 +130,12 @@ PYTHONPATH=src python tools/test_camera.py --config config/lubancat0n.json --hea
 PYTHONPATH=src python tools/test_tags.py --config config/lubancat0n.json
 ```
 
+画面左上角还会显示 `detect`、`raw`、`ok`：
+
+- `detect` 是每帧 AprilTag 检测耗时，持续很高说明 CPU 压力大
+- `raw` 是底层检测到的原始 tag 数量
+- `ok` 是通过 `hamming` 和 `decision_margin` 过滤后的数量
+
 按 `Esc` 或 `q` 退出。
 
 无桌面环境时使用：
@@ -180,6 +186,8 @@ sudo usermod -aG dialout $USER
 
 - 当前代码会在识别到的 tag 中自动选择物理尺寸最小的目标，并且 `landing_target.py` 只发送这个最小目标的位置。
 - 没识别到 Tag 时程序不会发送旧数据，避免飞控继续追一个过期目标。
+- 相机标定主要影响 `x/y/z` 位姿精度，不是识别连续性的主要原因。识别连续性更依赖 tag 在画面中的像素大小、清晰度、曝光、反光和 CPU 负载。
+- 30 mm 小码距离远时像素太少，不可能稳定识别。估算公式是 `tag_pixels ~= fx * tag_size_m / distance_m`。
 - 上机测试前必须拆桨。
 
 ## Git 提交和推送流程
