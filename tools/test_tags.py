@@ -5,7 +5,7 @@ import time
 
 import cv2
 
-from lubancat_apriltag.camera import open_camera
+from lubancat_apriltag.camera import camera_info, open_camera
 from lubancat_apriltag.config import load_config
 from lubancat_apriltag.pose import TargetPose
 from lubancat_apriltag.tag_tracker import NestedTagTracker
@@ -75,11 +75,12 @@ def main() -> None:
     parser.add_argument("--config", default="config/example_config.json")
     parser.add_argument("--headless", action="store_true", help="print tag pose without opening a preview window")
     parser.add_argument("--print-every", type=float, default=1.0, help="seconds between terminal prints")
-    parser.add_argument("--preview-scale", type=float, default=1.0, help="scale preview window to reduce GUI load")
+    parser.add_argument("--preview-scale", type=float, default=0.5, help="scale preview window to reduce GUI load")
     args = parser.parse_args()
 
     config = load_config(args.config)
     cap = open_camera(config.camera)
+    print("camera opened:", camera_info(cap))
     tracker = NestedTagTracker(config)
     last_frame_time = time.monotonic()
     last_print_time = 0.0

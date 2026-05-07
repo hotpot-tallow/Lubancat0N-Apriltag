@@ -81,10 +81,12 @@ cp config/example_config.json config/lubancat0n.json
 ```json
 "camera": {
   "device": 0,
-  "fx": 600.0,
-  "fy": 600.0,
-  "cx": 320.0,
-  "cy": 240.0
+  "width": 1920,
+  "height": 1080,
+  "fx": 1800.0,
+  "fy": 1350.0,
+  "cx": 960.0,
+  "cy": 540.0
 },
 "mavlink": {
   "connection": "/dev/ttyS8",
@@ -92,7 +94,7 @@ cp config/example_config.json config/lubancat0n.json
 }
 ```
 
-`fx/fy/cx/cy` 必须换成你自己的相机标定结果。没有内参时可以先用近似值跑通识别，但不要直接拿去飞。
+`width/height` 是摄像头采集分辨率，不是预览窗口大小。`fx/fy/cx/cy` 必须换成该分辨率下你自己的相机标定结果。没有内参时可以先用近似值跑通识别，但不要直接拿去飞。
 
 你的嵌套码尺寸在 `tag_sizes_m` 里：
 
@@ -128,6 +130,12 @@ PYTHONPATH=src python tools/test_camera.py --config config/lubancat0n.json --hea
 
 ```bash
 PYTHONPATH=src python tools/test_tags.py --config config/lubancat0n.json
+```
+
+默认预览窗口会按 `0.5` 缩小显示，但 AprilTag 仍使用配置里的采集分辨率做识别。可以手动调整：
+
+```bash
+PYTHONPATH=src python tools/test_tags.py --config config/lubancat0n.json --preview-scale 0.35
 ```
 
 画面左上角还会显示 `detect`、`raw`、`ok`：

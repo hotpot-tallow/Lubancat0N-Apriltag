@@ -4,7 +4,7 @@ import argparse
 
 import cv2
 
-from lubancat_apriltag.camera import open_camera
+from lubancat_apriltag.camera import camera_info, open_camera
 from lubancat_apriltag.config import load_config
 
 
@@ -16,6 +16,7 @@ def main() -> None:
 
     config = load_config(args.config)
     cap = open_camera(config.camera)
+    print("camera opened:", camera_info(cap))
 
     if args.headless:
         ok, frame = cap.read()

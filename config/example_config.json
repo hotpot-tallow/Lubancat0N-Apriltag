@@ -4,13 +4,13 @@
     "backend": "v4l2",
     "fourcc": "",
     "buffer_size": 1,
-    "width": 640,
-    "height": 480,
+    "width": 1920,
+    "height": 1080,
     "fps": 30,
-    "fx": 600.0,
-    "fy": 600.0,
-    "cx": 320.0,
-    "cy": 240.0
+    "fx": 1800.0,
+    "fy": 1350.0,
+    "cx": 960.0,
+    "cy": 540.0
   },
   "apriltag": {
     "family": "tag36h11",
