@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Optional
 
 import cv2
 from pupil_apriltags import Detector
 
 from .config import AppConfig
-from .pose import TargetPose, distance, transform_camera_to_body
+from .pose import TargetPose, distance, estimate_pose_from_corners, transform_camera_to_body
 
 
 class NestedTagTracker:
@@ -28,57 +28,53 @@ class NestedTagTracker:
     def detect(self, frame) -> Optional[TargetPose]:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        # pupil-apriltags accepts one tag_size per detect() call. For nested
-        # tags with different IDs and sizes, run pose estimation per target ID.
-        ids = list(self.config.apriltag.tag_priority)
-        ids.extend(tag_id for tag_id in self.config.apriltag.tag_sizes_m if tag_id not in ids)
+        detections = self.detector.detect(gray, estimate_tag_pose=False)
+        selected = None
+        selected_size = float("inf")
 
-        for tag_id in ids:
+        for detection in detections:
+            tag_id = int(detection.tag_id)
             tag_size_m = self.config.apriltag.tag_sizes_m.get(tag_id)
             if tag_size_m is None:
                 continue
+            if int(detection.hamming) > self.config.apriltag.max_hamming:
+                continue
+            if float(detection.decision_margin) < self.config.apriltag.min_decision_margin:
+                continue
+            if selected is None:
+                selected = detection
+                selected_size = tag_size_m
+                continue
+            if tag_size_m < selected_size:
+                selected = detection
+                selected_size = tag_size_m
+                continue
+            if tag_size_m == selected_size and detection.decision_margin > selected.decision_margin:
+                selected = detection
+                selected_size = tag_size_m
 
-            detections = self.detector.detect(
-                gray,
-                estimate_tag_pose=True,
-                camera_params=self.config.camera.params,
-                tag_size=tag_size_m,
-            )
+        if selected is None:
+            return None
 
-            candidates: List[TargetPose] = []
-            for detection in detections:
-                if int(detection.tag_id) != tag_id:
-                    continue
-                if int(detection.hamming) > self.config.apriltag.max_hamming:
-                    continue
-                if float(detection.decision_margin) < self.config.apriltag.min_decision_margin:
-                    continue
+        corners = tuple((float(point[0]), float(point[1])) for point in selected.corners)
+        camera_xyz = estimate_pose_from_corners(
+            corners,
+            selected_size,
+            self.config.camera.params,
+        )
+        body_xyz = transform_camera_to_body(camera_xyz, self.config.camera_to_body)
 
-                x_cam, y_cam, z_cam = (float(value) for value in detection.pose_t.flatten())
-                body_xyz = transform_camera_to_body(
-                    (x_cam, y_cam, z_cam),
-                    self.config.camera_to_body,
-                )
-                candidates.append(
-                    TargetPose(
-                        tag_id=tag_id,
-                        tag_size_m=tag_size_m,
-                        corners=tuple(
-                            (float(point[0]), float(point[1])) for point in detection.corners
-                        ),
-                        x_cam=x_cam,
-                        y_cam=y_cam,
-                        z_cam=z_cam,
-                        x_body=body_xyz[0],
-                        y_body=body_xyz[1],
-                        z_body=body_xyz[2],
-                        distance_m=distance(body_xyz),
-                        decision_margin=float(detection.decision_margin),
-                        hamming=int(detection.hamming),
-                    )
-                )
-
-            if candidates:
-                return max(candidates, key=lambda pose: pose.decision_margin)
-
-        return None
+        return TargetPose(
+            tag_id=int(selected.tag_id),
+            tag_size_m=selected_size,
+            corners=corners,
+            x_cam=camera_xyz[0],
+            y_cam=camera_xyz[1],
+            z_cam=camera_xyz[2],
+            x_body=body_xyz[0],
+            y_body=body_xyz[1],
+            z_body=body_xyz[2],
+            distance_m=distance(body_xyz),
+            decision_margin=float(selected.decision_margin),
+            hamming=int(selected.hamming),
+        )

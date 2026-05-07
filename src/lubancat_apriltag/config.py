@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple, Union
+from typing import Dict, Sequence, Tuple, Union
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,6 @@ class CameraConfig:
 class AprilTagConfig:
     family: str
     tag_sizes_m: Dict[int, float]
-    tag_priority: List[int]
     quad_decimate: float
     quad_sigma: float
     refine_edges: int
@@ -70,8 +69,6 @@ def load_config(path: Union[str, Path]) -> AppConfig:
     transform = raw["transform"]
 
     tag_sizes = {int(tag_id): float(size) for tag_id, size in apriltag["tag_sizes_m"].items()}
-    tag_priority = [int(tag_id) for tag_id in apriltag.get("tag_priority", tag_sizes.keys())]
-
     return AppConfig(
         camera=CameraConfig(
             device=camera.get("device", 0),
@@ -86,7 +83,6 @@ def load_config(path: Union[str, Path]) -> AppConfig:
         apriltag=AprilTagConfig(
             family=apriltag.get("family", "tag36h11"),
             tag_sizes_m=tag_sizes,
-            tag_priority=tag_priority,
             quad_decimate=float(apriltag.get("quad_decimate", 2.0)),
             quad_sigma=float(apriltag.get("quad_sigma", 0.0)),
             refine_edges=int(apriltag.get("refine_edges", 1)),
