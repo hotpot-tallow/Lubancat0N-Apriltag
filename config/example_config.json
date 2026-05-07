@@ -2,7 +2,7 @@
   "camera": {
     "device": 0,
     "backend": "v4l2",
-    "fourcc": "MJPG",
+    "fourcc": "",
     "buffer_size": 1,
     "width": 640,
     "height": 480,

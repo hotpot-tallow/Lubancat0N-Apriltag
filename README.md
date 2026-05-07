@@ -188,6 +188,7 @@ sudo usermod -aG dialout $USER
 - 没识别到 Tag 时程序不会发送旧数据，避免飞控继续追一个过期目标。
 - 相机标定主要影响 `x/y/z` 位姿精度，不是识别连续性的主要原因。识别连续性更依赖 tag 在画面中的像素大小、清晰度、曝光、反光和 CPU 负载。
 - 30 mm 小码距离远时像素太少，不可能稳定识别。估算公式是 `tag_pixels ~= fx * tag_size_m / distance_m`。
+- 如果加了 `fourcc` 后摄像头打不开，先把 `config/lubancat0n.json` 里的 `"fourcc"` 改成空字符串 `""`。只有确认摄像头支持 MJPG 时再设置 `"MJPG"`。
 - 上机测试前必须拆桨。
 
 ## Git 提交和推送流程
