@@ -174,12 +174,66 @@ id=0 size=0.500m cam=(+0.012,-0.035,+1.420) body=(+0.035,+0.012,+1.420) dist=1.4
 PYTHONPATH=src python tools/landing_target.py --config config/lubancat0n.json --dry-run
 ```
 
+当前发送格式是 ArduPilot 精准降落文档里的 MAVLink2 `LANDING_TARGET` 位置/四元数字段：
+
+```text
+MAVLink: 2
+message id: 149 LANDING_TARGET
+frame: MAV_FRAME_BODY_FRD = 12
+x/y/z: 目标在机体系下的位置，单位 m
+q: [1, 0, 0, 0]
+type: LANDING_TARGET_TYPE_VISION_FIDUCIAL
+position_valid: 1
+```
+
+这和旧 OpenMV 示例里的 MAVLink1 角度模式不同。旧方式主要填：
+
+```text
+angle_x / angle_y / distance
+```
+
+现在这版会填 MAVLink2 扩展字段：
+
+```text
+x / y / z / q / type / position_valid
+```
+
+可以不接飞控先检查打包结果：
+
+```bash
+PYTHONPATH=src python tools/inspect_landing_target_packet.py --config config/lubancat0n.json
+```
+
+如果看到：
+
+```text
+packet_magic: 0xfd expected: 0xfd
+message_id: 149
+frame: 12 MAV_FRAME_BODY_FRD
+position_valid: 1
+```
+
+说明打包为 MAVLink2。
+
+如果检查脚本无法运行，先升级 `pymavlink`：
+
+```bash
+pip install --upgrade pymavlink
+```
+
 ## 8. 连接飞控发送
 
 确认串口连接、飞控 TELEM 参数、权限都正确后运行：
 
 ```bash
 PYTHONPATH=src python tools/landing_target.py --config config/lubancat0n.json
+```
+
+飞控对应串口也要配置成 MAVLink2，例如 ArduPilot 常见配置：
+
+```text
+SERIALx_PROTOCOL = 2
+SERIALx_BAUD = 115
 ```
 
 如果串口权限不够：
