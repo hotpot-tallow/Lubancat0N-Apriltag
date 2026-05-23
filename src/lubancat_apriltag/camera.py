@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import multiprocessing as mp
+import shlex
+import subprocess
 import threading
 import time
-from queue import Empty, Full
+from queue import Empty, Full, Queue
 from typing import Optional, Tuple
 
 import cv2
+import numpy as np
 
 from .config import CameraConfig
 
@@ -335,13 +338,140 @@ class ProcessCamera:
         self._stop_process()
 
 
+def _gst_stdout_command(config: CameraConfig) -> list:
+    """把配置里的 GStreamer 管线改成向 stdout 输出 BGR 原始帧。"""
+    pipeline = str(config.device).strip()
+    if "! appsink" in pipeline:
+        pipeline = pipeline.split("! appsink", 1)[0].strip()
+    if "format=BGR" not in pipeline:
+        pipeline = f"{pipeline} ! videoconvert ! video/x-raw,format=BGR"
+    # 用 fdsink 直接吐原始帧，绕开 OpenCV 的 GStreamer VideoCapture 后端。
+    return ["gst-launch-1.0", "-q"] + shlex.split(pipeline) + ["!", "fdsink", "fd=1", "sync=false"]
+
+
+def _read_exact(stream, size: int) -> bytes:
+    """从管道读取固定长度字节；读不到完整一帧就返回当前已读数据。"""
+    chunks = []
+    remaining = size
+    while remaining > 0:
+        chunk = stream.read(remaining)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+class GstLaunchCamera:
+    """用 gst-launch-1.0 取流，Python 只读取 stdout 中的 BGR 原始帧。
+
+    这条路径不使用 OpenCV 的 GStreamer 后端，适合 gst-launch 单独稳定、
+    但 cv2.VideoCapture(..., CAP_GSTREAMER).read() 会卡死的板载 MIPI 摄像头。
+    """
+
+    def __init__(self, config: CameraConfig, read_timeout_s: float = 2.0) -> None:
+        self.config = config
+        self.read_timeout_s = max(float(read_timeout_s), 0.1)
+        self.width = int(config.width)
+        self.height = int(config.height)
+        self.fps = float(config.fps)
+        self._frame_size = self.width * self.height * 3
+        self._queue: Queue = Queue(maxsize=1)
+        self._stop_event = threading.Event()
+        self._process: Optional[subprocess.Popen] = None
+        self._thread: Optional[threading.Thread] = None
+        self._start()
+
+    def _start(self) -> None:
+        """启动 gst-launch 子进程和 stdout 读帧线程。"""
+        self._stop_event = threading.Event()
+        command = _gst_stdout_command(self.config)
+        self._process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=None,
+            bufsize=self._frame_size * 2,
+        )
+        self._thread = threading.Thread(target=self._reader_loop, name="gst-launch-reader", daemon=True)
+        self._thread.start()
+
+    def _reader_loop(self) -> None:
+        """持续从 gst-launch stdout 读取 BGR 帧，只保留最新帧。"""
+        assert self._process is not None
+        assert self._process.stdout is not None
+        while not self._stop_event.is_set():
+            data = _read_exact(self._process.stdout, self._frame_size)
+            if len(data) != self._frame_size:
+                break
+            frame = np.frombuffer(data, dtype=np.uint8).reshape((self.height, self.width, 3)).copy()
+            while True:
+                try:
+                    self._queue.get_nowait()
+                except Empty:
+                    break
+            try:
+                self._queue.put_nowait(frame)
+            except Full:
+                pass
+
+    def _stop(self) -> None:
+        """停止 gst-launch 子进程。"""
+        self._stop_event.set()
+        if self._process is not None:
+            self._process.terminate()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+        if self._process is not None and self._process.poll() is None:
+            self._process.kill()
+            self._process.wait(timeout=1.0)
+        self._process = None
+        self._thread = None
+
+    def _restart(self) -> None:
+        """超时没有新帧时重启 gst-launch 进程。"""
+        print(f"gst-launch frame timeout after {self.read_timeout_s:.1f}s; restarting gst-launch")
+        self._stop()
+        while True:
+            try:
+                self._queue.get_nowait()
+            except Empty:
+                break
+        self._start()
+
+    def read(self) -> Tuple[bool, object]:
+        """返回最新帧；如果 gst-launch 停止吐帧，则重启取流进程。"""
+        try:
+            return True, self._queue.get(timeout=self.read_timeout_s)
+        except Empty:
+            self._restart()
+            return False, None
+
+    def get(self, prop_id: int) -> float:
+        """兼容 cv2.VideoCapture.get。"""
+        if prop_id == cv2.CAP_PROP_FRAME_WIDTH:
+            return float(self.width)
+        if prop_id == cv2.CAP_PROP_FRAME_HEIGHT:
+            return float(self.height)
+        if prop_id == cv2.CAP_PROP_FPS:
+            return float(self.fps)
+        return 0.0
+
+    def isOpened(self) -> bool:
+        """gst-launch 进程是否仍在运行。"""
+        return self._process is not None and self._process.poll() is None
+
+    def release(self) -> None:
+        """释放 gst-launch 进程。"""
+        self._stop()
+
+
 def open_camera(config: CameraConfig, read_timeout_s: float = 2.0):
     """打开摄像头。
 
     V4L2 直连模式保留后台线程超时保护；GStreamer 管线模式用子进程隔离 C 层阻塞。
     """
     if _is_gstreamer_pipeline(config):
-        return ProcessCamera(config, read_timeout_s=read_timeout_s)
+        return GstLaunchCamera(config, read_timeout_s=read_timeout_s)
     return ResilientCamera(config, read_timeout_s=read_timeout_s)
 
 
