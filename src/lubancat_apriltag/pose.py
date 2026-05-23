@@ -11,6 +11,15 @@ import numpy as np
 Vector3 = Tuple[float, float, float]
 Matrix3 = Tuple[Tuple[float, float, float], ...]
 Point2 = Tuple[float, float]
+Quaternion = Tuple[float, float, float, float]
+
+
+@dataclass(frozen=True)
+class PoseEstimate:
+    """PnP 解算出的目标位姿，xyz 单位为米，q 顺序为 w/x/y/z。"""
+
+    xyz: Vector3
+    q: Quaternion
 
 
 @dataclass(frozen=True)
@@ -26,6 +35,7 @@ class TargetPose:
     x_body: float
     y_body: float
     z_body: float
+    q_body: Quaternion
     distance_m: float
     tag_pixel_width: float
     expected_z_m: float
@@ -39,6 +49,14 @@ def transform_camera_to_body(camera_xyz: Vector3, matrix: Matrix3) -> Vector3:
     mat = np.array(matrix, dtype=float)
     body = mat @ vec
     return float(body[0]), float(body[1]), float(body[2])
+
+
+def transform_quaternion_camera_to_body(q_camera: Quaternion, matrix: Matrix3) -> Quaternion:
+    """把目标姿态四元数从相机坐标系转换到机体系。"""
+    rotation_camera = quaternion_to_matrix(q_camera)
+    camera_to_body = np.array(matrix, dtype=float)
+    rotation_body = camera_to_body @ rotation_camera
+    return matrix_to_quaternion(rotation_body)
 
 
 def distance(xyz: Vector3) -> float:
@@ -93,11 +111,57 @@ def _reprojection_error(
     return float(cv2.norm(image_points_2d, projected_points, cv2.NORM_L2) / sqrt(len(projected_points)))
 
 
+def matrix_to_quaternion(matrix: np.ndarray) -> Quaternion:
+    """把 3x3 旋转矩阵转换成 MAVLink 使用的 w/x/y/z 四元数。"""
+    mat = matrix.astype(float)
+    trace = float(np.trace(mat))
+    if trace > 0.0:
+        scale = sqrt(trace + 1.0) * 2.0
+        w = 0.25 * scale
+        x = (mat[2, 1] - mat[1, 2]) / scale
+        y = (mat[0, 2] - mat[2, 0]) / scale
+        z = (mat[1, 0] - mat[0, 1]) / scale
+    elif mat[0, 0] > mat[1, 1] and mat[0, 0] > mat[2, 2]:
+        scale = sqrt(1.0 + mat[0, 0] - mat[1, 1] - mat[2, 2]) * 2.0
+        w = (mat[2, 1] - mat[1, 2]) / scale
+        x = 0.25 * scale
+        y = (mat[0, 1] + mat[1, 0]) / scale
+        z = (mat[0, 2] + mat[2, 0]) / scale
+    elif mat[1, 1] > mat[2, 2]:
+        scale = sqrt(1.0 + mat[1, 1] - mat[0, 0] - mat[2, 2]) * 2.0
+        w = (mat[0, 2] - mat[2, 0]) / scale
+        x = (mat[0, 1] + mat[1, 0]) / scale
+        y = 0.25 * scale
+        z = (mat[1, 2] + mat[2, 1]) / scale
+    else:
+        scale = sqrt(1.0 + mat[2, 2] - mat[0, 0] - mat[1, 1]) * 2.0
+        w = (mat[1, 0] - mat[0, 1]) / scale
+        x = (mat[0, 2] + mat[2, 0]) / scale
+        y = (mat[1, 2] + mat[2, 1]) / scale
+        z = 0.25 * scale
+
+    norm = max(sqrt(w * w + x * x + y * y + z * z), 1e-12)
+    return w / norm, x / norm, y / norm, z / norm
+
+
+def quaternion_to_matrix(q: Quaternion) -> np.ndarray:
+    """把 w/x/y/z 四元数转换成 3x3 旋转矩阵。"""
+    w, x, y, z = q
+    return np.array(
+        [
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
+            [2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w)],
+            [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y)],
+        ],
+        dtype=float,
+    )
+
+
 def estimate_pose_from_corners(
     corners: Tuple[Point2, Point2, Point2, Point2],
     tag_size_m: float,
     camera_params: Tuple[float, float, float, float],
-) -> Vector3:
+) -> PoseEstimate:
     """根据 tag 四个角点、真实尺寸和相机内参求出相机坐标系 xyz。"""
     half_size = tag_size_m / 2.0
     object_points = np.array(
@@ -154,11 +218,16 @@ def estimate_pose_from_corners(
             # 综合重投影误差和粗略距离，避免选中毫米级的错误近距离解。
             score = reproj + ratio_penalty * 4.0
             if best is None or score < best[0]:
-                best = (score, tvec)
+                best = (score, rvec, tvec)
 
     if best is None:
         raise RuntimeError("solvePnP failed")
 
-    _, tvec = best
+    _, rvec, tvec = best
     x_cam, y_cam, z_cam = tvec.flatten()
-    return float(x_cam), float(y_cam), float(z_cam)
+    rotation_matrix, _ = cv2.Rodrigues(rvec)
+    q_camera = matrix_to_quaternion(rotation_matrix)
+    return PoseEstimate(
+        xyz=(float(x_cam), float(y_cam), float(z_cam)),
+        q=q_camera,
+    )

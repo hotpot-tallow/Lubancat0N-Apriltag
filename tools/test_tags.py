@@ -131,6 +131,7 @@ def main() -> None:
                     f"px={pose.tag_pixel_width:.1f} expect_z={pose.expected_z_m:.3f} "
                     f"cam=({pose.x_cam:+.3f},{pose.y_cam:+.3f},{pose.z_cam:+.3f}) "
                     f"body=({pose.x_body:+.3f},{pose.y_body:+.3f},{pose.z_body:+.3f}) "
+                    f"q=({pose.q_body[0]:+.3f},{pose.q_body[1]:+.3f},{pose.q_body[2]:+.3f},{pose.q_body[3]:+.3f}) "
                     f"dist={pose.distance_m:.3f} margin={pose.decision_margin:.1f} "
                     f"fps={fps:.1f} detect_ms={detect_ms:.1f} raw={stats.get('raw_count', 0)}"
                 )

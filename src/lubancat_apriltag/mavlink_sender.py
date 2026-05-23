@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
+from math import atan2
 from typing import Tuple
 
 # pymavlink 必须在 import 前设置 MAVLINK20，否则扩展字段 x/y/z/position_valid 可能发不出去。
@@ -17,7 +18,6 @@ from .pose import TargetPose
 MAVLINK2_MAGIC = 0xFD
 LANDING_TARGET_FRAME = getattr(mavutil.mavlink, "MAV_FRAME_BODY_FRD", 12)
 LANDING_TARGET_TYPE = getattr(mavutil.mavlink, "LANDING_TARGET_TYPE_VISION_FIDUCIAL", 2)
-ZERO_ROTATION_QUATERNION = (1.0, 0.0, 0.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -47,19 +47,23 @@ def mavlink2_enabled() -> bool:
 
 def landing_target_payload(pose: TargetPose, target_num: int) -> LandingTargetPayload:
     """把识别到的机体系目标位置转换成 MAVLink LANDING_TARGET 字段。"""
+    # 兼容角度模式：Mission Planner 也会显示 angle_x/angle_y。
+    # 对 BODY_FRD 位置字段，水平/垂直角度可由 x/z、y/z 反算，单位是弧度。
+    angle_x = atan2(pose.x_body, pose.z_body)
+    angle_y = atan2(pose.y_body, pose.z_body)
     return LandingTargetPayload(
         time_usec=int(time.monotonic() * 1_000_000),
         target_num=target_num,
         frame=LANDING_TARGET_FRAME,
-        angle_x=0.0,
-        angle_y=0.0,
+        angle_x=angle_x,
+        angle_y=angle_y,
         distance=pose.distance_m,
         size_x=0.0,
         size_y=0.0,
         x=pose.x_body,
         y=pose.y_body,
         z=pose.z_body,
-        q=ZERO_ROTATION_QUATERNION,
+        q=pose.q_body,
         target_type=LANDING_TARGET_TYPE,
         position_valid=1,
     )

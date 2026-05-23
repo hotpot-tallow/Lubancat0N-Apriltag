@@ -19,7 +19,7 @@ def main() -> None:
     args = parser.parse_args()
 
     config = load_config(args.config)
-    # 这里的 TargetPose 是假数据，只用于检查打包后的 message id/frame/x/y/z。
+    # 这里的 TargetPose 是假数据，只用于检查打包后的 message id/frame/angle/x/y/z/q。
     pose = TargetPose(
         tag_id=0,
         tag_size_m=0.5,
@@ -30,6 +30,7 @@ def main() -> None:
         x_body=1.0,
         y_body=0.2,
         z_body=1.5,
+        q_body=(0.98, 0.01, 0.02, 0.20),
         distance_m=1.8,
         tag_pixel_width=100.0,
         expected_z_m=1.0,
@@ -66,6 +67,7 @@ def main() -> None:
     print("packet_magic:", hex(packet[0]), "expected:", hex(MAVLINK2_MAGIC))
     print("message_id:", msg.get_msgId())
     print("frame:", payload.frame, "MAV_FRAME_BODY_FRD")
+    print("angle_x/angle_y:", payload.angle_x, payload.angle_y)
     print("x/y/z:", payload.x, payload.y, payload.z)
     print("q:", payload.q)
     print("type:", payload.target_type)

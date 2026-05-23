@@ -126,7 +126,7 @@ cp config/example_config.json config/lubancat0n.json
 }
 ```
 
-这里单位是米，填的是 AprilTag 检测边界实际边长。程序会在当前画面识别到的 tag 里自动选择物理尺寸最小的一个，例如同时识别到 `0`、`1`、`2` 时，只使用 `2` 的位置。
+这里单位是米，填的是 AprilTag 检测边界实际边长。程序会在当前画面识别到的 tag 里按 `0 -> 1 -> 2` 的 ID 优先级选择目标；你的嵌套图案里通常 `0` 是最大码，所以同时识别到 `0`、`1`、`2` 时，会优先使用最大码 `0` 的位置。
 
 ## 5. 测摄像头
 
@@ -175,7 +175,7 @@ PYTHONPATH=src python3 tools/test_tags.py --config config/lubancat0n.json --head
 看到类似输出就说明识别和位姿估计通了：
 
 ```text
-id=0 size=0.500m px=312.5 expect_z=1.410 cam=(+0.012,-0.035,+1.420) body=(+0.035,+0.012,+1.420) dist=1.421 margin=84.2
+id=0 size=0.500m px=312.5 expect_z=1.410 cam=(+0.012,-0.035,+1.420) body=(+0.035,+0.012,+1.420) q=(+0.998,+0.010,+0.020,+0.055) dist=1.421 margin=84.2
 ```
 
 这里重点看：
@@ -210,7 +210,7 @@ MAVLink: 2
 message id: 149 LANDING_TARGET
 frame: MAV_FRAME_BODY_FRD = 12
 x/y/z: 目标在机体系下的位置，单位 m
-q: [1, 0, 0, 0]
+q: 目标姿态四元数，顺序为 w/x/y/z
 type: LANDING_TARGET_TYPE_VISION_FIDUCIAL
 position_valid: 1
 ```
@@ -221,11 +221,14 @@ position_valid: 1
 angle_x / angle_y / distance
 ```
 
-现在这版会填 MAVLink2 扩展字段：
+现在这版会同时填角度字段和 MAVLink2 扩展字段：
 
 ```text
+angle_x / angle_y / distance
 x / y / z / q / type / position_valid
 ```
+
+`angle_x` 和 `angle_y` 由机体系 `x/z`、`y/z` 反算得到，单位是弧度；`q` 不再固定为 `[1, 0, 0, 0]`，而是由 AprilTag 四个角点解算出的目标姿态转换得到。
 
 可以不接飞控先检查打包结果：
 
@@ -317,7 +320,7 @@ id / size / px / expect_z / cam / body / dist / margin / raw
 - `margin` 是否太低；太低通常是 tag 太小、模糊、反光或距离太远
 - `dist` 是否和 `expect_z` 接近；两者差很多时优先检查尺寸和内参
 
-如果使用嵌套 tag，程序默认选择物理尺寸最小的 tag。远距离测试时小 tag 很容易识别不稳定，可以先只保留最大 tag 的尺寸配置，例如：
+如果使用嵌套 tag，程序默认按 `0 -> 1 -> 2` 的 ID 优先级选择，也就是优先选择最大码。远距离测试时小 tag 很容易识别不稳定；如果你只想测试某一个码，可以先只保留那个 tag 的尺寸配置，例如只保留 `0`：
 
 ```json
 "tag_sizes_m": {
@@ -390,7 +393,7 @@ ps -o pid,stat,wchan,cmd -C python3
 
 ## 重要注意
 
-- 当前代码会在识别到的 tag 中自动选择物理尺寸最小的目标，并且 `landing_target.py` 只发送这个最小目标的位置。
+- 当前代码会在识别到的 tag 中按 `0 -> 1 -> 2` 选择目标；你的嵌套图案里这等价于优先发送最大码的位置。
 - 没识别到 Tag 时程序不会发送旧数据，避免飞控继续追一个过期目标。
 - 相机标定主要影响 `x/y/z` 位姿精度，不是识别连续性的主要原因。识别连续性更依赖 tag 在画面中的像素大小、清晰度、曝光、反光和 CPU 负载。
 - 30 mm 小码距离远时像素太少，不可能稳定识别。估算公式是 `tag_pixels ~= fx * tag_size_m / distance_m`。

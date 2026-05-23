@@ -13,6 +13,7 @@ from .pose import (
     expected_z_from_pixels,
     tag_pixel_width,
     transform_camera_to_body,
+    transform_quaternion_camera_to_body,
 )
 
 
@@ -46,7 +47,7 @@ class NestedTagTracker:
         # 这里只让 pupil_apriltags 做角点检测，位姿由 pose.py 统一计算。
         detections = self.detector.detect(gray, estimate_tag_pose=False)
         selected = None
-        selected_size = float("inf")
+        selected_size = 0.0
         accepted_count = 0
 
         for detection in detections:
@@ -60,17 +61,19 @@ class NestedTagTracker:
                 continue
             if float(detection.decision_margin) < self.config.apriltag.min_decision_margin:
                 continue
+
             accepted_count += 1
-            # 嵌套 tag 同时出现时，默认选择物理尺寸最小的那个。
+            # 嵌套 tag 同时出现时，按 ID 优先级选择：0 -> 1 -> 2。
+            # 你的图案里 ID 越小通常物理尺寸越大，所以这等价于优先使用最大码。
             if selected is None:
                 selected = detection
                 selected_size = tag_size_m
                 continue
-            if tag_size_m < selected_size:
+            if tag_id < int(selected.tag_id):
                 selected = detection
                 selected_size = tag_size_m
                 continue
-            if tag_size_m == selected_size and detection.decision_margin > selected.decision_margin:
+            if tag_id == int(selected.tag_id) and detection.decision_margin > selected.decision_margin:
                 selected = detection
                 selected_size = tag_size_m
 
@@ -84,14 +87,17 @@ class NestedTagTracker:
         if selected is None:
             return None
 
-        # pupil_apriltags 返回四个图像角点，后续根据真实尺寸解算 xyz。
+        # pupil_apriltags 返回四个图像角点，后续根据真实尺寸解算 xyz 和姿态四元数。
         corners = tuple((float(point[0]), float(point[1])) for point in selected.corners)
-        camera_xyz = estimate_pose_from_corners(
+        pose_estimate = estimate_pose_from_corners(
             corners,
             selected_size,
             self.config.camera.params,
         )
+        camera_xyz = pose_estimate.xyz
         body_xyz = transform_camera_to_body(camera_xyz, self.config.camera_to_body)
+        body_q = transform_quaternion_camera_to_body(pose_estimate.q, self.config.camera_to_body)
+
         # 下面两个字段只用于调试，帮助判断 PnP 距离是否离谱。
         pixel_width = tag_pixel_width(corners)
         expected_z = expected_z_from_pixels(
@@ -110,6 +116,7 @@ class NestedTagTracker:
             x_body=body_xyz[0],
             y_body=body_xyz[1],
             z_body=body_xyz[2],
+            q_body=body_q,
             distance_m=distance(body_xyz),
             tag_pixel_width=pixel_width,
             expected_z_m=expected_z,

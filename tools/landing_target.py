@@ -68,6 +68,7 @@ def main() -> None:
             print(
                 f"LANDING_TARGET id={pose.tag_id} "
                 f"target_num={payload.target_num} frame={payload.frame} "
+                f"angle_x={payload.angle_x:+.4f} angle_y={payload.angle_y:+.4f} "
                 f"x={payload.x:+.3f} y={payload.y:+.3f} z={payload.z:+.3f} "
                 f"dist={payload.distance:.3f} q={payload.q} "
                 f"type={payload.target_type} position_valid={payload.position_valid}"
