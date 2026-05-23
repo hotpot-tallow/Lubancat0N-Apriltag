@@ -50,37 +50,40 @@ def main() -> None:
     period = 1.0 / config.mavlink.send_rate_hz
     last_send = 0.0
 
-    while True:
-        # 读取摄像头图像；失败时等待一下继续读。
-        ok, frame = cap.read()
-        if not ok:
-            print("camera read failed")
-            time.sleep(0.1)
-            continue
+    try:
+        while True:
+            # 读取摄像头图像；失败时等待一下继续读。
+            ok, frame = cap.read()
+            if not ok:
+                print("camera read failed")
+                time.sleep(0.1)
+                continue
 
-        pose = tracker.detect(frame)
-        if pose is None:
-            # 当前逻辑是识别不到 tag 就不发送旧数据，避免飞控追踪过期目标。
-            continue
+            pose = tracker.detect(frame)
+            if pose is None:
+                # 当前逻辑是识别不到 tag 就不发送旧数据，避免飞控追踪过期目标。
+                continue
 
-        now = time.monotonic()
-        if now - last_send < period:
-            # 按配置的 send_rate_hz 限速发送，避免串口刷太快。
-            continue
-        last_send = now
+            now = time.monotonic()
+            if now - last_send < period:
+                # 按配置的 send_rate_hz 限速发送，避免串口刷太快。
+                continue
+            last_send = now
 
-        if sender is None:
-            payload = landing_target_payload(pose, config.mavlink.target_num)
-            print(
-                f"LANDING_TARGET id={pose.tag_id} "
-                f"target_num={payload.target_num} frame={payload.frame} "
-                f"angle_x={payload.angle_x:+.4f} angle_y={payload.angle_y:+.4f} "
-                f"x={payload.x:+.3f} y={payload.y:+.3f} z={payload.z:+.3f} "
-                f"dist={payload.distance:.3f} q={payload.q} "
-                f"type={payload.target_type} position_valid={payload.position_valid}"
-            )
-        else:
-            sender.send(pose)
+            if sender is None:
+                payload = landing_target_payload(pose, config.mavlink.target_num)
+                print(
+                    f"LANDING_TARGET id={pose.tag_id} "
+                    f"target_num={payload.target_num} frame={payload.frame} "
+                    f"angle_x={payload.angle_x:+.4f} angle_y={payload.angle_y:+.4f} "
+                    f"x={payload.x:+.3f} y={payload.y:+.3f} z={payload.z:+.3f} "
+                    f"dist={payload.distance:.3f} q={payload.q} "
+                    f"type={payload.target_type} position_valid={payload.position_valid}"
+                )
+            else:
+                sender.send(pose)
+    finally:
+        cap.release()
 
 
 if __name__ == "__main__":

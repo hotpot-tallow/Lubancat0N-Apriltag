@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import multiprocessing as mp
 import threading
 import time
+from queue import Empty, Full
 from typing import Optional, Tuple
 
 import cv2
@@ -216,13 +218,130 @@ class DirectCamera:
         self._cap.release()
 
 
+def _camera_process_main(
+    config: CameraConfig,
+    frame_queue,
+    info_queue,
+    stop_event,
+) -> None:
+    """在独立进程里读取摄像头；如果底层 cap.read() 卡死，不会拖死主进程。"""
+    cap = None
+    try:
+        cap = _open_raw_camera(config)
+        info_queue.put(
+            (
+                int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                float(cap.get(cv2.CAP_PROP_FPS)),
+            )
+        )
+        while not stop_event.is_set():
+            ok, frame = cap.read()
+            if not ok:
+                time.sleep(0.02)
+                continue
+
+            # 队列里只保留最新帧，主进程处理慢时直接丢旧帧，避免延迟越堆越大。
+            while True:
+                try:
+                    frame_queue.get_nowait()
+                except Empty:
+                    break
+            try:
+                frame_queue.put_nowait(frame)
+            except Full:
+                pass
+    finally:
+        if cap is not None:
+            cap.release()
+
+
+class ProcessCamera:
+    """把 GStreamer/OpenCV 取流隔离到子进程，避免 C 层 read() 卡住主进程。
+
+    这比线程更适合不稳定的 MIPI/GStreamer 链路：子进程卡死时，主进程可以 terminate
+    它并重启；Ctrl+C 也能先回到主进程处理。
+    """
+
+    def __init__(self, config: CameraConfig, read_timeout_s: float = 2.0) -> None:
+        self.config = config
+        self.read_timeout_s = max(float(read_timeout_s), 0.1)
+        self._ctx = mp.get_context()
+        self._frame_queue = None
+        self._info_queue = None
+        self._stop_event = None
+        self._process = None
+        self._info = (config.width, config.height, float(config.fps))
+        self._start_process()
+
+    def _start_process(self) -> None:
+        """启动摄像头子进程。"""
+        self._frame_queue = self._ctx.Queue(maxsize=1)
+        self._info_queue = self._ctx.Queue(maxsize=1)
+        self._stop_event = self._ctx.Event()
+        self._process = self._ctx.Process(
+            target=_camera_process_main,
+            args=(self.config, self._frame_queue, self._info_queue, self._stop_event),
+            daemon=True,
+        )
+        self._process.start()
+        try:
+            self._info = self._info_queue.get(timeout=self.read_timeout_s)
+        except Empty:
+            print("camera process started, but no camera info was returned yet")
+
+    def _stop_process(self) -> None:
+        """停止摄像头子进程；正常停不下来就强制结束。"""
+        if self._stop_event is not None:
+            self._stop_event.set()
+        if self._process is not None:
+            self._process.join(timeout=1.0)
+            if self._process.is_alive():
+                self._process.terminate()
+                self._process.join(timeout=1.0)
+        self._process = None
+
+    def _restart(self) -> None:
+        """超时未收到新帧时重启摄像头子进程。"""
+        print(f"camera process timeout after {self.read_timeout_s:.1f}s; restarting camera process")
+        self._stop_process()
+        self._start_process()
+
+    def read(self) -> Tuple[bool, object]:
+        """从子进程获取最新帧；等待超时则重启子进程。"""
+        try:
+            return True, self._frame_queue.get(timeout=self.read_timeout_s)
+        except Empty:
+            self._restart()
+            return False, None
+
+    def get(self, prop_id: int) -> float:
+        """兼容 cv2.VideoCapture.get。"""
+        width, height, fps = self._info
+        if prop_id == cv2.CAP_PROP_FRAME_WIDTH:
+            return float(width)
+        if prop_id == cv2.CAP_PROP_FRAME_HEIGHT:
+            return float(height)
+        if prop_id == cv2.CAP_PROP_FPS:
+            return float(fps)
+        return 0.0
+
+    def isOpened(self) -> bool:
+        """摄像头子进程是否仍在运行。"""
+        return self._process is not None and self._process.is_alive()
+
+    def release(self) -> None:
+        """释放摄像头子进程。"""
+        self._stop_process()
+
+
 def open_camera(config: CameraConfig, read_timeout_s: float = 2.0):
     """打开摄像头。
 
-    V4L2 直连模式保留后台线程超时保护；GStreamer 管线模式直接读取，避免频繁重启管线。
+    V4L2 直连模式保留后台线程超时保护；GStreamer 管线模式用子进程隔离 C 层阻塞。
     """
     if _is_gstreamer_pipeline(config):
-        return DirectCamera(config)
+        return ProcessCamera(config, read_timeout_s=read_timeout_s)
     return ResilientCamera(config, read_timeout_s=read_timeout_s)
 
 

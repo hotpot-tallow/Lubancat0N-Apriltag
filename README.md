@@ -491,7 +491,7 @@ PYTHONPATH=src python3 tools/landing_target.py --config config/lubancat0n.json -
 
 如果仍然频繁重启，说明底层取流链路不稳定，优先改用 GStreamer 1280x720 管线、降低分辨率，或者检查 MIPI/RKISP 驱动状态。
 
-注意：如果 `backend` 是 `gstreamer` 且 `device` 是一整条 GStreamer 管线，程序会直接读取这条管线，不再使用后台线程反复重启。原因是 GStreamer 管线已经由 `appsink drop=true max-buffers=1 sync=false` 控制缓冲；如果再从 Python 里频繁 release/reopen，反而可能造成卡顿或退出时报 `FATAL: exception not rethrown`。
+注意：如果 `backend` 是 `gstreamer` 且 `device` 是一整条 GStreamer 管线，程序会把摄像头读取放到独立子进程里。原因是 OpenCV/GStreamer 的 `cap.read()` 有时会卡在 C 层，主进程直接读时 `Ctrl+C` 也可能退不出来；放到子进程后，主进程可以在超时后终止并重启摄像头子进程，避免整套识别/发送程序被拖死。
 
 如果 `Ctrl+C` 无法结束，可以另开一个终端查看进程状态：
 

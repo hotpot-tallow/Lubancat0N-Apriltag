@@ -27,25 +27,29 @@ def main() -> None:
 
     if args.headless:
         # 无桌面环境下保存一张图片，便于确认摄像头实际画面。
-        ok, frame = cap.read()
-        if not ok:
-            raise RuntimeError("camera read failed")
-        cv2.imwrite("camera_test.jpg", frame)
-        print("saved camera_test.jpg", frame.shape)
-        return
+        try:
+            ok, frame = cap.read()
+            if not ok:
+                raise RuntimeError("camera read failed")
+            cv2.imwrite("camera_test.jpg", frame)
+            print("saved camera_test.jpg", frame.shape)
+            return
+        finally:
+            cap.release()
 
-    while True:
-        # 有桌面环境时直接实时预览，按 Esc 退出。
-        ok, frame = cap.read()
-        if not ok:
-            print("camera read failed")
-            continue
-        cv2.imshow("camera", frame)
-        if cv2.waitKey(1) == 27:
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
+    try:
+        while True:
+            # 有桌面环境时直接实时预览，按 Esc 退出。
+            ok, frame = cap.read()
+            if not ok:
+                print("camera read failed")
+                continue
+            cv2.imshow("camera", frame)
+            if cv2.waitKey(1) == 27:
+                break
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

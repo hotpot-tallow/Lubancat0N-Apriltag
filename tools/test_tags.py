@@ -104,63 +104,64 @@ def main() -> None:
     last_print_time = 0.0
     fps = 0.0
 
-    while True:
-        # 先计算摄像头实际 FPS，再做识别，方便判断是否 CPU 压力过大。
-        ok, frame = cap.read()
-        now = time.monotonic()
-        frame_dt = now - last_frame_time
-        last_frame_time = now
-        instant_fps = 1.0 / frame_dt if frame_dt > 0.0 else 0.0
-        fps = instant_fps if fps == 0.0 else fps * 0.9 + instant_fps * 0.1
+    try:
+        while True:
+            # 先计算摄像头实际 FPS，再做识别，方便判断是否 CPU 压力过大。
+            ok, frame = cap.read()
+            now = time.monotonic()
+            frame_dt = now - last_frame_time
+            last_frame_time = now
+            instant_fps = 1.0 / frame_dt if frame_dt > 0.0 else 0.0
+            fps = instant_fps if fps == 0.0 else fps * 0.9 + instant_fps * 0.1
 
-        if not ok:
-            print("camera read failed")
-            time.sleep(0.1)
-            continue
+            if not ok:
+                print("camera read failed")
+                time.sleep(0.1)
+                continue
 
-        detect_start = time.monotonic()
-        pose = tracker.detect(frame)
-        detect_ms = (time.monotonic() - detect_start) * 1000.0
-        stats = tracker.last_stats
+            detect_start = time.monotonic()
+            pose = tracker.detect(frame)
+            detect_ms = (time.monotonic() - detect_start) * 1000.0
+            stats = tracker.last_stats
 
-        if now - last_print_time >= args.print_every:
-            # 定时打印一次，headless 模式下主要看这里的 id/size/px/dist。
-            last_print_time = now
+            if now - last_print_time >= args.print_every:
+                # 定时打印一次，headless 模式下主要看这里的 id/size/px/dist。
+                last_print_time = now
+                if pose is None:
+                    print(
+                        f"no tag fps={fps:.1f} detect_ms={detect_ms:.1f} "
+                        f"raw={stats.get('raw_count', 0)} accepted={stats.get('accepted_count', 0)}"
+                    )
+                else:
+                    print(
+                        f"id={pose.tag_id} size={pose.tag_size_m:.3f}m "
+                        f"px={pose.tag_pixel_width:.1f} expect_z={pose.expected_z_m:.3f} "
+                        f"cam=({pose.x_cam:+.3f},{pose.y_cam:+.3f},{pose.z_cam:+.3f}) "
+                        f"body=({pose.x_body:+.3f},{pose.y_body:+.3f},{pose.z_body:+.3f}) "
+                        f"q=({pose.q_body[0]:+.3f},{pose.q_body[1]:+.3f},{pose.q_body[2]:+.3f},{pose.q_body[3]:+.3f}) "
+                        f"dist={pose.distance_m:.3f} margin={pose.decision_margin:.1f} "
+                        f"fps={fps:.1f} detect_ms={detect_ms:.1f} raw={stats.get('raw_count', 0)}"
+                    )
+
+            if args.headless:
+                continue
+
+            # 有窗口时，把识别结果画到图像上实时查看。
             if pose is None:
-                print(
-                    f"no tag fps={fps:.1f} detect_ms={detect_ms:.1f} "
-                    f"raw={stats.get('raw_count', 0)} accepted={stats.get('accepted_count', 0)}"
-                )
+                draw_no_tag(frame, fps, detect_ms, stats)
             else:
-                print(
-                    f"id={pose.tag_id} size={pose.tag_size_m:.3f}m "
-                    f"px={pose.tag_pixel_width:.1f} expect_z={pose.expected_z_m:.3f} "
-                    f"cam=({pose.x_cam:+.3f},{pose.y_cam:+.3f},{pose.z_cam:+.3f}) "
-                    f"body=({pose.x_body:+.3f},{pose.y_body:+.3f},{pose.z_body:+.3f}) "
-                    f"q=({pose.q_body[0]:+.3f},{pose.q_body[1]:+.3f},{pose.q_body[2]:+.3f},{pose.q_body[3]:+.3f}) "
-                    f"dist={pose.distance_m:.3f} margin={pose.decision_margin:.1f} "
-                    f"fps={fps:.1f} detect_ms={detect_ms:.1f} raw={stats.get('raw_count', 0)}"
-                )
+                draw_pose(frame, pose, fps, detect_ms, stats)
 
-        if args.headless:
-            continue
-
-        # 有窗口时，把识别结果画到图像上实时查看。
-        if pose is None:
-            draw_no_tag(frame, fps, detect_ms, stats)
-        else:
-            draw_pose(frame, pose, fps, detect_ms, stats)
-
-        preview = frame
-        if args.preview_scale != 1.0:
-            preview = cv2.resize(frame, None, fx=args.preview_scale, fy=args.preview_scale)
-        cv2.imshow("AprilTag test", preview)
-        key = cv2.waitKey(1) & 0xFF
-        if key in (27, ord("q")):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
+            preview = frame
+            if args.preview_scale != 1.0:
+                preview = cv2.resize(frame, None, fx=args.preview_scale, fy=args.preview_scale)
+            cv2.imshow("AprilTag test", preview)
+            key = cv2.waitKey(1) & 0xFF
+            if key in (27, ord("q")):
+                break
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
