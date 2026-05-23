@@ -6,7 +6,14 @@ import cv2
 from pupil_apriltags import Detector
 
 from .config import AppConfig
-from .pose import TargetPose, distance, estimate_pose_from_corners, transform_camera_to_body
+from .pose import (
+    TargetPose,
+    distance,
+    estimate_pose_from_corners,
+    expected_z_from_pixels,
+    tag_pixel_width,
+    transform_camera_to_body,
+)
 
 
 class NestedTagTracker:
@@ -78,6 +85,12 @@ class NestedTagTracker:
             self.config.camera.params,
         )
         body_xyz = transform_camera_to_body(camera_xyz, self.config.camera_to_body)
+        pixel_width = tag_pixel_width(corners)
+        expected_z = expected_z_from_pixels(
+            corners,
+            selected_size,
+            self.config.camera.params,
+        )
 
         return TargetPose(
             tag_id=int(selected.tag_id),
@@ -90,6 +103,8 @@ class NestedTagTracker:
             y_body=body_xyz[1],
             z_body=body_xyz[2],
             distance_m=distance(body_xyz),
+            tag_pixel_width=pixel_width,
+            expected_z_m=expected_z,
             decision_margin=float(selected.decision_margin),
             hamming=int(selected.hamming),
         )
