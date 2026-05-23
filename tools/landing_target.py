@@ -21,6 +21,12 @@ def main() -> None:
     parser.add_argument("--config", default="config/example_config.json")
     parser.add_argument("--dry-run", action="store_true", help="print LANDING_TARGET values without opening MAVLink")
     parser.add_argument(
+        "--camera-read-timeout",
+        type=float,
+        default=2.0,
+        help="restart camera if no new frame is received within N seconds",
+    )
+    parser.add_argument(
         "--watchdog-timeout",
         type=float,
         default=0.0,
@@ -30,7 +36,7 @@ def main() -> None:
     enable_watchdog(args.watchdog_timeout)
 
     config = load_config(args.config)
-    cap = open_camera(config.camera)
+    cap = open_camera(config.camera, read_timeout_s=args.camera_read_timeout)
     tracker = NestedTagTracker(config)
     # dry-run 模式不打开串口，只把即将发送的内容打印出来。
     sender = None if args.dry_run else LandingTargetSender(config.mavlink)

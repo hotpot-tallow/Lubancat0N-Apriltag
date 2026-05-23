@@ -13,10 +13,16 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config/example_config.json")
     parser.add_argument("--headless", action="store_true", help="save one frame instead of opening a preview window")
+    parser.add_argument(
+        "--camera-read-timeout",
+        type=float,
+        default=2.0,
+        help="restart camera if no new frame is received within N seconds",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
-    cap = open_camera(config.camera)
+    cap = open_camera(config.camera, read_timeout_s=args.camera_read_timeout)
     print("camera opened:", camera_info(cap))
 
     if args.headless:

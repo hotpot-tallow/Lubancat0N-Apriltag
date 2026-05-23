@@ -383,6 +383,20 @@ PYTHONPATH=src python3 tools/landing_target.py --config config/lubancat0n.json -
 - 卡在 `tracker.detect()`：AprilTag 检测耗时异常，优先降低分辨率、增大 tag、或调大 `quad_decimate`
 - 卡在 `sender.send()`：串口写入阻塞，优先检查飞控串口连接、波特率和权限
 
+当前代码已经给摄像头读取加了超时保护：主循环不会直接卡死在 `cap.read()`，如果超过 2 秒没有收到新帧，会打印：
+
+```text
+camera read timeout after 2.0s; restarting camera
+```
+
+然后自动释放并重开摄像头。这个时间可以手动调整，例如：
+
+```bash
+PYTHONPATH=src python3 tools/landing_target.py --config config/lubancat0n.json --camera-read-timeout 3
+```
+
+如果仍然频繁重启，说明底层取流链路不稳定，优先改用 GStreamer 1280x720 管线、降低分辨率，或者检查 MIPI/RKISP 驱动状态。
+
 如果 `Ctrl+C` 无法结束，可以另开一个终端查看进程状态：
 
 ```bash

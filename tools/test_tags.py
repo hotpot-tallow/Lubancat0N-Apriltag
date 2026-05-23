@@ -82,6 +82,12 @@ def main() -> None:
     parser.add_argument("--print-every", type=float, default=1.0, help="seconds between terminal prints")
     parser.add_argument("--preview-scale", type=float, default=0.5, help="scale preview window to reduce GUI load")
     parser.add_argument(
+        "--camera-read-timeout",
+        type=float,
+        default=2.0,
+        help="restart camera if no new frame is received within N seconds",
+    )
+    parser.add_argument(
         "--watchdog-timeout",
         type=float,
         default=0.0,
@@ -91,7 +97,7 @@ def main() -> None:
     enable_watchdog(args.watchdog_timeout)
 
     config = load_config(args.config)
-    cap = open_camera(config.camera)
+    cap = open_camera(config.camera, read_timeout_s=args.camera_read_timeout)
     print("camera opened:", camera_info(cap))
     tracker = NestedTagTracker(config)
     last_frame_time = time.monotonic()
