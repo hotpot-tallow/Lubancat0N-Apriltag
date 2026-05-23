@@ -114,7 +114,67 @@ cp config/example_config.json config/lubancat0n.json
 }
 ```
 
-如果 `NV12` 管线打不开，可以把 `format=NV12` 改成你用 `v4l2-ctl -d /dev/video0 --list-formats-ext` 查到的格式，例如 `UYVY`。
+### V4L2 和 GStreamer 的区别
+
+`V4L2` 是 Linux 内核提供的视频设备接口，`/dev/video0`、`/dev/video1` 这类设备就是通过它访问的。OpenCV 使用 `backend: "v4l2"` 时，基本就是直接让 OpenCV 去和 V4L2 设备要帧。优点是简单；缺点是对 MIPI/RKISP 这种多层摄像头链路，格式转换、分辨率协商、缓冲控制都比较粗，容易出现实际分辨率不是你配置的值，或者长时间运行后卡在 `cap.read()`。
+
+`GStreamer` 是一条可配置的视频处理管线。它底层仍然可以从 V4L2 取 `/dev/video0`，但你可以明确写出输入格式、分辨率、帧率、格式转换和输出缓冲策略。对鲁班猫 MIPI/RKISP 摄像头，推荐用 GStreamer，是因为它能强制 `1280x720` 输出，并用 `appsink drop=true max-buffers=1 sync=false` 丢掉旧帧，只保留最新帧，减少缓冲堆积导致的卡死。
+
+简单理解：
+
+```text
+V4L2: OpenCV 直接找摄像头要帧，简单但控制少。
+GStreamer: 先搭一条取流/转格式/丢旧帧的管线，再把最新帧交给 OpenCV，控制更细。
+```
+
+### 从根源减少摄像头卡死
+
+`camera read timeout` 自动重启只是保险措施；真正要减少卡死，优先把摄像头链路调稳定：
+
+1. 强制使用 GStreamer 管线，不要让 OpenCV/V4L2 自动协商到 `3264x2160`。
+2. 分辨率先固定为 `1280x720`，并确保相机内参也是这个分辨率下标定的结果。
+3. `appsink` 必须保留 `drop=true max-buffers=1 sync=false`，处理不过来时丢旧帧，不堆积旧画面。
+4. `fourcc` 设为空字符串 `""`，不要给 MIPI 摄像头强行设置 `MJPG`。
+5. 如果仍然卡，先把 AprilTag 的 `quad_decimate` 从 `2.0` 调到 `3.0`，降低 CPU 压力。
+6. 用 `tools/test_camera.py --headless` 确认实际打开分辨率是 `1280x720`，不是高分辨率。
+
+推荐配置如下：
+
+```json
+"camera": {
+  "device": "v4l2src device=/dev/video0 io-mode=4 ! video/x-raw,format=NV12,width=1280,height=720,framerate=30/1 ! videoconvert ! video/x-raw,format=BGR ! appsink drop=true max-buffers=1 sync=false",
+  "backend": "gstreamer",
+  "fourcc": "",
+  "buffer_size": 1,
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "fx": 982.6,
+  "fy": 733.2,
+  "cx": 653.1,
+  "cy": 361.5
+}
+```
+
+改完后按这个顺序验证：
+
+```bash
+PYTHONPATH=src python3 tools/test_camera.py --config config/lubancat0n.json --headless
+PYTHONPATH=src python3 tools/test_tags.py --config config/lubancat0n.json --headless --print-every 0.5
+PYTHONPATH=src python3 tools/landing_target.py --config config/lubancat0n.json --dry-run
+```
+
+如果 `NV12` 管线打不开，再用下面命令查看 `/dev/video0` 支持的格式：
+
+```bash
+v4l2-ctl -d /dev/video0 --list-formats-ext
+```
+
+然后把管线里的 `format=NV12` 改成实际支持且稳定的格式，例如 `UYVY`。如果 GStreamer 报缺少插件，先安装：
+
+```bash
+sudo apt install -y gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+```
 
 你的嵌套码尺寸在 `tag_sizes_m` 里：
 
