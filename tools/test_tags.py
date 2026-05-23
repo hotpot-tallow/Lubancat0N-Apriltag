@@ -7,6 +7,7 @@ import cv2
 
 from lubancat_apriltag.camera import camera_info, open_camera
 from lubancat_apriltag.config import load_config
+from lubancat_apriltag.debug import enable_watchdog
 from lubancat_apriltag.pose import TargetPose
 from lubancat_apriltag.tag_tracker import NestedTagTracker
 
@@ -80,7 +81,14 @@ def main() -> None:
     parser.add_argument("--headless", action="store_true", help="print tag pose without opening a preview window")
     parser.add_argument("--print-every", type=float, default=1.0, help="seconds between terminal prints")
     parser.add_argument("--preview-scale", type=float, default=0.5, help="scale preview window to reduce GUI load")
+    parser.add_argument(
+        "--watchdog-timeout",
+        type=float,
+        default=0.0,
+        help="dump Python stack every N seconds when the process appears stuck",
+    )
     args = parser.parse_args()
+    enable_watchdog(args.watchdog_timeout)
 
     config = load_config(args.config)
     cap = open_camera(config.camera)

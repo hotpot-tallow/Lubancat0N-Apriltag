@@ -360,6 +360,34 @@ PYTHONPATH=src python3 tools/landing_target.py --config config/lubancat0n.json
 
 如果飞控一开始收到、过一会儿收不到，通常是识别中断。因为当前逻辑是识别不到 tag 就不发送旧数据，避免飞控继续追踪过期目标。
 
+### 9.6 程序像死机一样卡住时
+
+如果终端不再刷新，`Ctrl+C` 也没有反应，通常说明程序卡在 OpenCV/GStreamer/V4L2/串口这类底层阻塞调用里。可以加 watchdog 参数定位卡在哪一步：
+
+```bash
+PYTHONPATH=src python3 tools/test_tags.py --config config/lubancat0n.json --headless --print-every 0.5 --watchdog-timeout 10
+```
+
+正式发送时也可以用：
+
+```bash
+PYTHONPATH=src python3 tools/landing_target.py --config config/lubancat0n.json --watchdog-timeout 10
+```
+
+如果卡住超过 10 秒，终端会打印当前调用栈。常见判断：
+
+- 卡在 `cap.read()`：摄像头取流/GStreamer/RKISP 阻塞，优先检查分辨率、GStreamer 管线和 CPU 压力
+- 卡在 `tracker.detect()`：AprilTag 检测耗时异常，优先降低分辨率、增大 tag、或调大 `quad_decimate`
+- 卡在 `sender.send()`：串口写入阻塞，优先检查飞控串口连接、波特率和权限
+
+如果 `Ctrl+C` 无法结束，可以另开一个终端查看进程状态：
+
+```bash
+ps -o pid,stat,wchan,cmd -C python3
+```
+
+如果 `STAT` 里有 `D`，表示进程卡在内核不可中断 I/O，通常是摄像头驱动或底层取流阻塞，`kill -9` 也可能暂时无效，需要停止相关服务、重新插拔摄像头或重启板子。
+
 ## 重要注意
 
 - 当前代码会在识别到的 tag 中自动选择物理尺寸最小的目标，并且 `landing_target.py` 只发送这个最小目标的位置。

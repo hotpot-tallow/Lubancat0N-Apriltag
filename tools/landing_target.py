@@ -5,6 +5,7 @@ import time
 
 from lubancat_apriltag.camera import open_camera
 from lubancat_apriltag.config import load_config
+from lubancat_apriltag.debug import enable_watchdog
 from lubancat_apriltag.mavlink_sender import (
     LANDING_TARGET_FRAME,
     LandingTargetSender,
@@ -19,7 +20,14 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config/example_config.json")
     parser.add_argument("--dry-run", action="store_true", help="print LANDING_TARGET values without opening MAVLink")
+    parser.add_argument(
+        "--watchdog-timeout",
+        type=float,
+        default=0.0,
+        help="dump Python stack every N seconds when the process appears stuck",
+    )
     args = parser.parse_args()
+    enable_watchdog(args.watchdog_timeout)
 
     config = load_config(args.config)
     cap = open_camera(config.camera)
