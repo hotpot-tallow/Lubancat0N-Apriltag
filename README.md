@@ -176,6 +176,40 @@ v4l2-ctl -d /dev/video0 --list-formats-ext
 sudo apt install -y gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 ```
 
+如果终端反复出现下面这种 OpenCV/GStreamer 警告：
+
+```text
+GStreamer warning: GStreamer: unhandled property
+```
+
+说明程序打开的是 GStreamer 管线，但又额外调用了 OpenCV 的 `cap.set(width/height/fps)`。当前代码已经对管线模式跳过这些 `setProperty` 调用；更新代码后仍然反复 `camera read failed`，就要单独测试管线本身能不能稳定吐帧。
+
+先用 `gst-launch-1.0` 绕过 OpenCV 测试：
+
+```bash
+gst-launch-1.0 -v v4l2src device=/dev/video0 io-mode=4 ! \
+  'video/x-raw,format=NV12,width=1280,height=720,framerate=30/1' ! \
+  videoconvert ! fpsdisplaysink video-sink=fakesink sync=false
+```
+
+如果这个命令本身就报错或没有稳定 FPS，说明不是 Python 代码问题，而是这条 GStreamer 管线不适合当前摄像头。依次尝试：
+
+```bash
+gst-launch-1.0 -v v4l2src device=/dev/video0 io-mode=2 ! \
+  'video/x-raw,format=NV12,width=1280,height=720,framerate=30/1' ! \
+  videoconvert ! fpsdisplaysink video-sink=fakesink sync=false
+
+gst-launch-1.0 -v v4l2src device=/dev/video0 ! \
+  'video/x-raw,format=NV12,width=1280,height=720,framerate=30/1' ! \
+  videoconvert ! fpsdisplaysink video-sink=fakesink sync=false
+
+gst-launch-1.0 -v v4l2src device=/dev/video0 io-mode=4 ! \
+  'video/x-raw,format=UYVY,width=1280,height=720,framerate=30/1' ! \
+  videoconvert ! fpsdisplaysink video-sink=fakesink sync=false
+```
+
+哪一条 `gst-launch-1.0` 能稳定显示 FPS，就把同样的 `v4l2src ... ! video/x-raw ... ! videoconvert ... ! appsink ...` 写回 `lubancat0n.json`。
+
 你的嵌套码尺寸在 `tag_sizes_m` 里：
 
 ```json

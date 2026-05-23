@@ -30,8 +30,18 @@ def _backend_id(name: str) -> int:
     return cv2.CAP_ANY
 
 
+def _is_gstreamer_pipeline(config: CameraConfig) -> bool:
+    """判断当前 device 是否是一整条 GStreamer 管线字符串。"""
+    return config.backend.lower() in ("gstreamer", "gst") and isinstance(config.device, str)
+
+
 def _apply_camera_options(cap: cv2.VideoCapture, config: CameraConfig, use_optional: bool) -> None:
     """把配置里的分辨率、帧率、缓存和像素格式写入摄像头。"""
+    # GStreamer 管线里已经明确写了 format/width/height/framerate/appsink。
+    # 再调用 cap.set(...) 会触发 OpenCV 的 unhandled property 警告，部分板载相机还会因此取流不稳定。
+    if _is_gstreamer_pipeline(config):
+        return
+
     # fourcc/buffer_size 有些 MIPI 摄像头不支持，所以允许在第二次尝试时跳过。
     if use_optional and config.fourcc:
         cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*config.fourcc[:4]))
@@ -44,11 +54,15 @@ def _apply_camera_options(cap: cv2.VideoCapture, config: CameraConfig, use_optio
 
 def _open_raw_camera(config: CameraConfig) -> cv2.VideoCapture:
     """按配置打开一条原始 OpenCV VideoCapture，失败时自动退回到更保守的打开方式。"""
-    attempts = [
-        (_backend_id(config.backend), True),
-        (_backend_id(config.backend), False),
-        (cv2.CAP_ANY, False),
-    ]
+    if _is_gstreamer_pipeline(config):
+        # 管线字符串只能交给 GStreamer 后端；不要再把它交给 CAP_ANY/V4L2 乱试。
+        attempts = [(cv2.CAP_GSTREAMER, False)]
+    else:
+        attempts = [
+            (_backend_id(config.backend), True),
+            (_backend_id(config.backend), False),
+            (cv2.CAP_ANY, False),
+        ]
 
     for backend, use_optional in attempts:
         # 同一个摄像头尝试多种方式，尽量兼容 USB 摄像头和板载 MIPI 摄像头。
