@@ -88,7 +88,9 @@ def _reprojection_error(
 ) -> float:
     """计算 PnP 解的重投影误差，误差越小表示角点越能对回原图。"""
     projected, _ = cv2.projectPoints(object_points, rvec, tvec, camera_matrix, distortion)
-    return float(cv2.norm(image_points, projected, cv2.NORM_L2) / sqrt(len(projected)))
+    projected_points = projected.reshape(-1, 2).astype(np.float32)
+    image_points_2d = image_points.reshape(-1, 2).astype(np.float32)
+    return float(cv2.norm(image_points_2d, projected_points, cv2.NORM_L2) / sqrt(len(projected_points)))
 
 
 def estimate_pose_from_corners(
