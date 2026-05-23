@@ -186,8 +186,43 @@ class ResilientCamera:
             self._thread.join(timeout=1.0)
 
 
-def open_camera(config: CameraConfig, read_timeout_s: float = 2.0) -> ResilientCamera:
-    """打开带超时保护的摄像头。"""
+class DirectCamera:
+    """直接读取 OpenCV VideoCapture，主要用于已经验证稳定的 GStreamer 管线。
+
+    GStreamer 管线自身已经用 appsink drop/max-buffers 控制缓冲。这里不再用后台线程
+    反复 release/reopen，避免和 OpenCV/GStreamer 的内部线程在退出或重连时互相影响。
+    """
+
+    def __init__(self, config: CameraConfig) -> None:
+        self.config = config
+        self._cap = _open_raw_camera(config)
+
+    def read(self) -> Tuple[bool, object]:
+        """直接返回下一帧。"""
+        return self._cap.read()
+
+    def get(self, prop_id: int) -> float:
+        """兼容 cv2.VideoCapture.get。GStreamer 管线不查询 FOURCC，避免无意义警告。"""
+        if _is_gstreamer_pipeline(self.config) and prop_id == cv2.CAP_PROP_FOURCC:
+            return 0.0
+        return float(self._cap.get(prop_id))
+
+    def isOpened(self) -> bool:
+        """兼容 cv2.VideoCapture.isOpened。"""
+        return bool(self._cap.isOpened())
+
+    def release(self) -> None:
+        """释放摄像头。"""
+        self._cap.release()
+
+
+def open_camera(config: CameraConfig, read_timeout_s: float = 2.0):
+    """打开摄像头。
+
+    V4L2 直连模式保留后台线程超时保护；GStreamer 管线模式直接读取，避免频繁重启管线。
+    """
+    if _is_gstreamer_pipeline(config):
+        return DirectCamera(config)
     return ResilientCamera(config, read_timeout_s=read_timeout_s)
 
 
