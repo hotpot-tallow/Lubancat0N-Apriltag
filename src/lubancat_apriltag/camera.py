@@ -18,8 +18,11 @@ def _fourcc_text(value: float) -> str:
 
 def _backend_id(name: str) -> int:
     """根据配置选择 OpenCV 摄像头后端，当前主要支持 Linux V4L2。"""
-    if name.lower() == "v4l2":
+    normalized = name.lower()
+    if normalized == "v4l2":
         return cv2.CAP_V4L2
+    if normalized in ("gstreamer", "gst"):
+        return cv2.CAP_GSTREAMER
     return cv2.CAP_ANY
 
 

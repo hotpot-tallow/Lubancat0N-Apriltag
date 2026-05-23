@@ -96,6 +96,26 @@ cp config/example_config.json config/lubancat0n.json
 
 `width/height` 是摄像头采集分辨率，不是预览窗口大小。`fx/fy/cx/cy` 必须换成该分辨率下你自己的相机标定结果。没有内参时可以先用近似值跑通识别，但不要直接拿去飞。
 
+如果你使用鲁班猫 MIPI/RKISP 摄像头，V4L2 可能不接受 OpenCV 设置的 `1280x720`，实际会打开成 `3264x2160`。这会导致 CPU 压力变大，也会让 1280x720 标定出的内参和实际图像分辨率不一致。建议改用 GStreamer 管线强制输出 1280x720：
+
+```json
+"camera": {
+  "device": "v4l2src device=/dev/video0 io-mode=4 ! video/x-raw,format=NV12,width=1280,height=720 ! videoconvert ! video/x-raw,format=BGR ! appsink drop=true max-buffers=1 sync=false",
+  "backend": "gstreamer",
+  "fourcc": "",
+  "buffer_size": 1,
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "fx": 982.6,
+  "fy": 733.2,
+  "cx": 653.1,
+  "cy": 361.5
+}
+```
+
+如果 `NV12` 管线打不开，可以把 `format=NV12` 改成你用 `v4l2-ctl -d /dev/video0 --list-formats-ext` 查到的格式，例如 `UYVY`。
+
 你的嵌套码尺寸在 `tag_sizes_m` 里：
 
 ```json
@@ -266,6 +286,14 @@ PYTHONPATH=src python3 tools/test_camera.py --config config/lubancat0n.json --he
 ```
 
 输出里会显示实际 `width x height`，并保存 `camera_test.jpg`。`config/lubancat0n.json` 里的 `width/height/fx/fy/cx/cy` 必须和标定时的分辨率一致。
+
+如果你配置的是 `1280x720`，但输出显示类似：
+
+```text
+camera opened: 3264x2160 fps=30.0
+```
+
+说明摄像头实际没有按配置分辨率输出。MIPI/RKISP 摄像头建议使用上面的 GStreamer 管线，让实际打开分辨率和标定分辨率一致。
 
 ### 9.2 先不接飞控，检查识别和位姿
 
