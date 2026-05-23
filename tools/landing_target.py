@@ -15,6 +15,7 @@ from lubancat_apriltag.tag_tracker import NestedTagTracker
 
 
 def main() -> None:
+    """主程序：读取摄像头、识别 tag，并向飞控发送 LANDING_TARGET。"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config/example_config.json")
     parser.add_argument("--dry-run", action="store_true", help="print LANDING_TARGET values without opening MAVLink")
@@ -23,6 +24,7 @@ def main() -> None:
     config = load_config(args.config)
     cap = open_camera(config.camera)
     tracker = NestedTagTracker(config)
+    # dry-run 模式不打开串口，只把即将发送的内容打印出来。
     sender = None if args.dry_run else LandingTargetSender(config.mavlink)
     print(
         "LANDING_TARGET output:",
@@ -35,6 +37,7 @@ def main() -> None:
     last_send = 0.0
 
     while True:
+        # 读取摄像头图像；失败时等待一下继续读。
         ok, frame = cap.read()
         if not ok:
             print("camera read failed")
@@ -43,10 +46,12 @@ def main() -> None:
 
         pose = tracker.detect(frame)
         if pose is None:
+            # 当前逻辑是识别不到 tag 就不发送旧数据，避免飞控追踪过期目标。
             continue
 
         now = time.monotonic()
         if now - last_send < period:
+            # 按配置的 send_rate_hz 限速发送，避免串口刷太快。
             continue
         last_send = now
 

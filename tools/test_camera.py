@@ -9,6 +9,7 @@ from lubancat_apriltag.config import load_config
 
 
 def main() -> None:
+    """单独测试摄像头是否能打开、是否能正常读帧。"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config/example_config.json")
     parser.add_argument("--headless", action="store_true", help="save one frame instead of opening a preview window")
@@ -19,6 +20,7 @@ def main() -> None:
     print("camera opened:", camera_info(cap))
 
     if args.headless:
+        # 无桌面环境下保存一张图片，便于确认摄像头实际画面。
         ok, frame = cap.read()
         if not ok:
             raise RuntimeError("camera read failed")
@@ -27,6 +29,7 @@ def main() -> None:
         return
 
     while True:
+        # 有桌面环境时直接实时预览，按 Esc 退出。
         ok, frame = cap.read()
         if not ok:
             print("camera read failed")

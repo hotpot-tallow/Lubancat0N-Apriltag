@@ -8,6 +8,8 @@ from typing import Dict, Sequence, Tuple, Union
 
 @dataclass(frozen=True)
 class CameraConfig:
+    """摄像头采集参数和内参。fx/fy/cx/cy 必须和运行分辨率对应。"""
+
     device: Union[int, str]
     backend: str
     fourcc: str
@@ -22,11 +24,14 @@ class CameraConfig:
 
     @property
     def params(self) -> Tuple[float, float, float, float]:
+        """返回 OpenCV/PnP 常用的相机内参顺序。"""
         return self.fx, self.fy, self.cx, self.cy
 
 
 @dataclass(frozen=True)
 class AprilTagConfig:
+    """AprilTag 检测参数，tag_sizes_m 的单位是米。"""
+
     family: str
     tag_sizes_m: Dict[int, float]
     quad_decimate: float
@@ -39,6 +44,8 @@ class AprilTagConfig:
 
 @dataclass(frozen=True)
 class MavlinkConfig:
+    """MAVLink 串口和 LANDING_TARGET 发送参数。"""
+
     connection: str
     baud: int
     source_system: int
@@ -49,6 +56,8 @@ class MavlinkConfig:
 
 @dataclass(frozen=True)
 class AppConfig:
+    """程序运行所需的完整配置。"""
+
     camera: CameraConfig
     apriltag: AprilTagConfig
     mavlink: MavlinkConfig
@@ -56,6 +65,7 @@ class AppConfig:
 
 
 def _matrix3(value: Sequence[Sequence[float]]) -> Tuple[Tuple[float, float, float], ...]:
+    """读取并校验 camera_to_body 坐标变换矩阵。"""
     rows = tuple(tuple(float(item) for item in row) for row in value)
     if len(rows) != 3 or any(len(row) != 3 for row in rows):
         raise ValueError("transform.camera_to_body must be a 3x3 matrix")
@@ -63,6 +73,7 @@ def _matrix3(value: Sequence[Sequence[float]]) -> Tuple[Tuple[float, float, floa
 
 
 def load_config(path: Union[str, Path]) -> AppConfig:
+    """从 JSON 文件加载配置，并转换成带类型的 dataclass。"""
     with Path(path).open("r", encoding="utf-8") as fp:
         raw = json.load(fp)
 
@@ -71,6 +82,7 @@ def load_config(path: Union[str, Path]) -> AppConfig:
     mavlink = raw["mavlink"]
     transform = raw["transform"]
 
+    # JSON 的 key 只能可靠地当字符串读入，这里转成 int 方便和检测到的 tag_id 匹配。
     tag_sizes = {int(tag_id): float(size) for tag_id, size in apriltag["tag_sizes_m"].items()}
     return AppConfig(
         camera=CameraConfig(

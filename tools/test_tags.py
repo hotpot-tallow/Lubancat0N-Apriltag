@@ -12,6 +12,7 @@ from lubancat_apriltag.tag_tracker import NestedTagTracker
 
 
 def draw_status(frame, fps: float, detect_ms: float, stats) -> None:
+    """在预览图上显示帧率、检测耗时和识别数量。"""
     cv2.putText(
         frame,
         f"FPS: {fps:.1f} detect: {detect_ms:.1f}ms raw: {stats.get('raw_count', 0)} ok: {stats.get('accepted_count', 0)}",
@@ -25,6 +26,7 @@ def draw_status(frame, fps: float, detect_ms: float, stats) -> None:
 
 
 def draw_pose(frame, pose: TargetPose, fps: float, detect_ms: float, stats) -> None:
+    """把 tag 边框、中心点和位姿信息画到预览图上。"""
     corners = [(int(x), int(y)) for x, y in pose.corners]
     for index, start in enumerate(corners):
         end = corners[(index + 1) % len(corners)]
@@ -57,6 +59,7 @@ def draw_pose(frame, pose: TargetPose, fps: float, detect_ms: float, stats) -> N
 
 
 def draw_no_tag(frame, fps: float, detect_ms: float, stats) -> None:
+    """没有识别到 tag 时显示状态信息。"""
     draw_status(frame, fps, detect_ms, stats)
     cv2.putText(
         frame,
@@ -71,6 +74,7 @@ def draw_no_tag(frame, fps: float, detect_ms: float, stats) -> None:
 
 
 def main() -> None:
+    """调试 AprilTag 识别和位姿输出，可有窗口或 headless 打印。"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config/example_config.json")
     parser.add_argument("--headless", action="store_true", help="print tag pose without opening a preview window")
@@ -87,6 +91,7 @@ def main() -> None:
     fps = 0.0
 
     while True:
+        # 先计算摄像头实际 FPS，再做识别，方便判断是否 CPU 压力过大。
         ok, frame = cap.read()
         now = time.monotonic()
         frame_dt = now - last_frame_time
@@ -105,6 +110,7 @@ def main() -> None:
         stats = tracker.last_stats
 
         if now - last_print_time >= args.print_every:
+            # 定时打印一次，headless 模式下主要看这里的 id/size/px/dist。
             last_print_time = now
             if pose is None:
                 print(
@@ -124,6 +130,7 @@ def main() -> None:
         if args.headless:
             continue
 
+        # 有窗口时，把识别结果画到图像上实时查看。
         if pose is None:
             draw_no_tag(frame, fps, detect_ms, stats)
         else:

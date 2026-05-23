@@ -1,2 +1,1 @@
-"""AprilTag precision landing helpers for LubanCat 0N."""
-
+"""鲁班猫 0N 上使用 AprilTag 做精准降落的辅助模块。"""
