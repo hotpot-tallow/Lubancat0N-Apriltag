@@ -69,8 +69,8 @@ chmod +x "${PROJECT_DIR}/scripts/run_landing_target.sh"
 cat > "${SERVICE_FILE}" <<SERVICE
 [Unit]
 Description=LubanCat AprilTag LANDING_TARGET sender
-After=multi-user.target
-Wants=multi-user.target
+After=multi-user.target systemd-udev-settle.service
+Wants=multi-user.target systemd-udev-settle.service
 
 [Service]
 Type=simple
@@ -79,10 +79,12 @@ WorkingDirectory=${PROJECT_DIR}
 Environment=LANDING_TARGET_CONFIG=${CONFIG_PATH}
 Environment=PYTHONUNBUFFERED=1
 Environment=MAVLINK20=1
+Environment=STARTUP_DELAY=8
+Environment=DEVICE_WAIT_TIMEOUT=60
 SupplementaryGroups=video dialout
 ExecStart=${PROJECT_DIR}/scripts/run_landing_target.sh
 Restart=always
-RestartSec=2
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

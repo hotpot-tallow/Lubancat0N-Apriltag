@@ -1,9 +1,9 @@
 # 开机自启动
 
-这个项目的正式运行入口是：
+项目正式运行入口：
 
 ```bash
-PYTHONPATH=src python tools/landing_target.py --config config/lubancat0n.json
+PYTHONPATH=src python3 tools/landing_target.py --config config/lubancat0n.json
 ```
 
 开机自启动使用 `systemd` 管理，服务会自动启动 AprilTag 识别程序，并通过配置里的 MAVLink 串口向飞控发送 `LANDING_TARGET`。
@@ -33,13 +33,13 @@ cp config/example_config.json config/lubancat0n.json
 建议先不接飞控测试识别和打包：
 
 ```bash
-PYTHONPATH=src python tools/landing_target.py --config config/lubancat0n.json --dry-run
+PYTHONPATH=src python3 tools/landing_target.py --config config/lubancat0n.json --dry-run
 ```
 
 确认能识别 Tag 后，再接飞控运行：
 
 ```bash
-PYTHONPATH=src python tools/landing_target.py --config config/lubancat0n.json
+PYTHONPATH=src python3 tools/landing_target.py --config config/lubancat0n.json
 ```
 
 ## 3. 安装开机自启动
@@ -56,12 +56,35 @@ sudo bash scripts/install_autostart.sh --config /home/cat/Lubancat0N-Apriltag/co
 
 安装脚本会创建并启动 `lubancat-apriltag.service`。服务使用当前登录用户运行，并附加 `video`、`dialout` 组权限，便于访问摄像头和串口。
 
+服务启动时会先等一小段时间，再等待配置里的摄像头设备和 MAVLink 串口出现。默认参数是：
+
+```text
+STARTUP_DELAY=8
+DEVICE_WAIT_TIMEOUT=60
+```
+
+飞控排针供电时，鲁班猫亮灯不代表摄像头、串口和飞控 MAVLink 已经准备好。这个等待步骤可以避免服务启动太早。
+
 ## 4. 查看运行状态
 
 ```bash
 systemctl status lubancat-apriltag.service
 journalctl -u lubancat-apriltag.service -f
 ```
+
+如果手动运行可以发送，但开机自启动没有发送，先看本次开机日志：
+
+```bash
+journalctl -u lubancat-apriltag.service -b --no-pager
+```
+
+重点看是否出现：
+
+- `waiting for camera`
+- `waiting for mavlink`
+- `timeout waiting for camera`
+- `timeout waiting for mavlink`
+- 摄像头管线或串口打开失败
 
 如果启动失败，优先检查日志里是否有：
 
