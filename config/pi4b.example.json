@@ -17,12 +17,15 @@
     "families": [
       {
         "name": "tagCustom48h12",
+        "bits_corrected": 2,
+        "max_codes": 10,
         "tag_sizes_m": {
           "0": 0.5
         }
       },
       {
         "name": "tag36h11",
+        "bits_corrected": 2,
         "tag_sizes_m": {
           "1": 0.128
         }

@@ -17,6 +17,44 @@ from .pose import (
 )
 
 
+def _build_detector(family, tag_config):
+    """创建可控制纠错表大小的检测器，避免大码族耗尽内存。"""
+    # pupil_apriltags 把 bits_corrected 硬编码为 2。先用很小的 tag16h5 初始化
+    # Python 封装，再清除它并按配置纠错位数挂载目标家族。
+    detector = Detector(
+        families="tag16h5",
+        nthreads=tag_config.nthreads,
+        quad_decimate=tag_config.quad_decimate,
+        quad_sigma=tag_config.quad_sigma,
+        refine_edges=tag_config.refine_edges,
+        decode_sharpening=tag_config.decode_sharpening,
+        debug=0,
+    )
+
+    old_families = dict(detector.tag_families)
+    family_pointer_type = type(next(iter(old_families.values())))
+    detector.libc.apriltag_detector_clear_families(detector.tag_detector_ptr)
+    for old_name, old_family in old_families.items():
+        destroy = getattr(detector.libc, f"{old_name}_destroy")
+        destroy.restype = None
+        destroy(old_family)
+
+    creator = getattr(detector.libc, f"{family.name}_create")
+    creator.restype = family_pointer_type
+    family_pointer = creator()
+    if family.max_codes is not None:
+        available_codes = int(family_pointer.contents.ncodes)
+        family_pointer.contents.ncodes = min(family.max_codes, available_codes)
+    detector.libc.apriltag_detector_add_family_bits(
+        detector.tag_detector_ptr,
+        family_pointer,
+        family.bits_corrected,
+    )
+    detector.tag_families = {family.name: family_pointer}
+    detector.params["families"] = [family.name]
+    return detector
+
+
 class NestedTagTracker:
     """检测嵌套 AprilTag，并返回当前选中 tag 的位姿。"""
 
@@ -32,19 +70,11 @@ class NestedTagTracker:
             "selected_size_m": None,
         }
         tag_config = config.apriltag
-        # pupil_apriltags 的 Python 封装一次只初始化一个家族，因此每个家族使用独立检测器。
+        # 每个家族使用独立检测器，既能混合家族，也能分别限制纠错表内存。
         self.detectors = tuple(
             (
                 family,
-                Detector(
-                    families=family.name,
-                    nthreads=tag_config.nthreads,
-                    quad_decimate=tag_config.quad_decimate,
-                    quad_sigma=tag_config.quad_sigma,
-                    refine_edges=tag_config.refine_edges,
-                    decode_sharpening=tag_config.decode_sharpening,
-                    debug=0,
-                ),
+                _build_detector(family, tag_config),
             )
             for family in tag_config.families
         )

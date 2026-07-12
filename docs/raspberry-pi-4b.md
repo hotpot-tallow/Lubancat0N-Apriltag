@@ -87,6 +87,8 @@ cp config/pi4b.example.json config/pi4b.json
 
 多家族在当前 `pupil_apriltags` 封装下需要分别执行检测，耗时大约是单家族的两倍。树莓派4B建议先使用 `quad_decimate=2.0`，再根据 `detect_ms` 和远距离丢失率调整。
 
+`tagCustom48h12` 包含四万多个合法码，直接为整个家族构造2位纠错表可能占用数GB内存并长时间卡在初始化阶段。模板设置 `max_codes=10`，只加载和识别该家族的 ID `0～9`，因此两个家族都可以使用 `bits_corrected=2`。配置的标签 ID 必须小于对应家族的 `max_codes`。全局 `max_hamming` 只负责过滤已经返回的检测结果。
+
 ## 5. 分层测试
 
 每次只运行一个程序，摄像头不能同时被两个进程占用。

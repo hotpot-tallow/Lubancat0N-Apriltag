@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Sequence, Tuple, Union
+from typing import Dict, Optional, Sequence, Tuple, Union
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,8 @@ class AprilTagFamilyConfig:
 
     name: str
     tag_sizes_m: Dict[int, float]
+    bits_corrected: int
+    max_codes: Optional[int]
 
 
 @dataclass(frozen=True)
@@ -95,7 +97,24 @@ def _tag_families(value: dict) -> Tuple[AprilTagFamilyConfig, ...]:
     raw_families = value.get("families")
     if raw_families is None:
         name = str(value.get("family", "tag36h11"))
-        return (AprilTagFamilyConfig(name, _tag_sizes(value["tag_sizes_m"], name)),)
+        bits_corrected = int(value.get("bits_corrected", 2))
+        if bits_corrected < 0 or bits_corrected > 2:
+            raise ValueError("apriltag.bits_corrected must be between 0 and 2")
+        max_codes_value = value.get("max_codes")
+        max_codes = None if max_codes_value is None else int(max_codes_value)
+        if max_codes is not None and max_codes <= 0:
+            raise ValueError("apriltag.max_codes must be positive")
+        tag_sizes = _tag_sizes(value["tag_sizes_m"], name)
+        if max_codes is not None and any(tag_id >= max_codes for tag_id in tag_sizes):
+            raise ValueError("apriltag tag id must be lower than max_codes")
+        return (
+            AprilTagFamilyConfig(
+                name,
+                tag_sizes,
+                bits_corrected,
+                max_codes,
+            ),
+        )
 
     if not isinstance(raw_families, list) or not raw_families:
         raise ValueError("apriltag.families must be a non-empty list")
@@ -107,7 +126,25 @@ def _tag_families(value: dict) -> Tuple[AprilTagFamilyConfig, ...]:
         if name in seen_names:
             raise ValueError(f"duplicate apriltag family: {name}")
         seen_names.add(name)
-        families.append(AprilTagFamilyConfig(name, _tag_sizes(item["tag_sizes_m"], name)))
+        default_bits = 0 if name == "tagCustom48h12" else 2
+        bits_corrected = int(item.get("bits_corrected", default_bits))
+        if bits_corrected < 0 or bits_corrected > 2:
+            raise ValueError(f"apriltag family {name} bits_corrected must be between 0 and 2")
+        max_codes_value = item.get("max_codes")
+        max_codes = None if max_codes_value is None else int(max_codes_value)
+        if max_codes is not None and max_codes <= 0:
+            raise ValueError(f"apriltag family {name} max_codes must be positive")
+        tag_sizes = _tag_sizes(item["tag_sizes_m"], name)
+        if max_codes is not None and any(tag_id >= max_codes for tag_id in tag_sizes):
+            raise ValueError(f"apriltag family {name} tag id must be lower than max_codes")
+        families.append(
+            AprilTagFamilyConfig(
+                name,
+                tag_sizes,
+                bits_corrected,
+                max_codes,
+            )
+        )
     return tuple(families)
 
 
