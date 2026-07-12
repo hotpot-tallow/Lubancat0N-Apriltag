@@ -13,13 +13,21 @@
     "cy": 480.0
   },
   "apriltag": {
-    "family": "tag36h11",
     "nthreads": 3,
-    "tag_sizes_m": {
-      "0": 0.5,
-      "1": 0.128,
-      "2": 0.03
-    },
+    "families": [
+      {
+        "name": "tagCustom48h12",
+        "tag_sizes_m": {
+          "0": 0.5
+        }
+      },
+      {
+        "name": "tag36h11",
+        "tag_sizes_m": {
+          "1": 0.128
+        }
+      }
+    ],
     "quad_decimate": 2.0,
     "quad_sigma": 0.0,
     "refine_edges": 1,
@@ -30,7 +38,7 @@
   "mavlink": {
     "connection": "/dev/serial0",
     "baud": 115200,
-    "source_system": 42,
+    "source_system": 1,
     "source_component": 191,
     "target_num": 0,
     "send_rate_hz": 20.0

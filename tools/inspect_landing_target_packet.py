@@ -21,6 +21,7 @@ def main() -> None:
     config = load_config(args.config)
     # 这里的 TargetPose 是假数据，只用于检查打包后的 message id/frame/angle/x/y/z/q。
     pose = TargetPose(
+        tag_family="tagCustom48h12",
         tag_id=0,
         tag_size_m=0.5,
         corners=((0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)),

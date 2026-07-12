@@ -26,18 +26,27 @@ class NestedTagTracker:
         self.last_stats = {
             "raw_count": 0,
             "accepted_count": 0,
+            "raw_details": (),
+            "selected_family": None,
             "selected_tag_id": None,
             "selected_size_m": None,
         }
         tag_config = config.apriltag
-        self.detector = Detector(
-            families=tag_config.family,
-            nthreads=tag_config.nthreads,
-            quad_decimate=tag_config.quad_decimate,
-            quad_sigma=tag_config.quad_sigma,
-            refine_edges=tag_config.refine_edges,
-            decode_sharpening=tag_config.decode_sharpening,
-            debug=0,
+        # pupil_apriltags 的 Python 封装一次只初始化一个家族，因此每个家族使用独立检测器。
+        self.detectors = tuple(
+            (
+                family,
+                Detector(
+                    families=family.name,
+                    nthreads=tag_config.nthreads,
+                    quad_decimate=tag_config.quad_decimate,
+                    quad_sigma=tag_config.quad_sigma,
+                    refine_edges=tag_config.refine_edges,
+                    decode_sharpening=tag_config.decode_sharpening,
+                    debug=0,
+                ),
+            )
+            for family in tag_config.families
         )
 
     def detect(self, frame) -> Optional[TargetPose]:
@@ -53,14 +62,24 @@ class NestedTagTracker:
             raise ValueError(f"unsupported camera frame shape: {frame.shape}")
 
         # 这里只让 pupil_apriltags 做角点检测，位姿由 pose.py 统一计算。
-        detections = self.detector.detect(gray, estimate_tag_pose=False)
+        detections = []
+        for family, detector in self.detectors:
+            for detection in detector.detect(gray, estimate_tag_pose=False):
+                detections.append((family, detection))
+
+        raw_details = tuple(
+            f"{family.name}:{int(detection.tag_id)}/h{int(detection.hamming)}"
+            f"/m{float(detection.decision_margin):.1f}"
+            for family, detection in detections
+        )
+        selected_family = None
         selected = None
         selected_size = 0.0
         accepted_count = 0
 
-        for detection in detections:
+        for family, detection in detections:
             tag_id = int(detection.tag_id)
-            tag_size_m = self.config.apriltag.tag_sizes_m.get(tag_id)
+            tag_size_m = family.tag_sizes_m.get(tag_id)
             # 配置里没有尺寸的 tag 直接忽略，避免拿未知尺寸算距离。
             if tag_size_m is None:
                 continue
@@ -71,28 +90,32 @@ class NestedTagTracker:
                 continue
 
             accepted_count += 1
-            # 嵌套 tag 同时出现时，按 ID 优先级选择：0 -> 1 -> 2。
-            # 你的图案里 ID 越小通常物理尺寸越大，所以这等价于优先使用最大码。
+            # 跨家族的 ID 没有可比性，直接选择物理尺寸最大的已接受标签。
             if selected is None:
+                selected_family = family
                 selected = detection
                 selected_size = tag_size_m
                 continue
-            if tag_id < int(selected.tag_id):
+            if tag_size_m > selected_size:
+                selected_family = family
                 selected = detection
                 selected_size = tag_size_m
                 continue
-            if tag_id == int(selected.tag_id) and detection.decision_margin > selected.decision_margin:
+            if tag_size_m == selected_size and detection.decision_margin > selected.decision_margin:
+                selected_family = family
                 selected = detection
                 selected_size = tag_size_m
 
         self.last_stats = {
             "raw_count": len(detections),
             "accepted_count": accepted_count,
+            "raw_details": raw_details,
+            "selected_family": selected_family.name if selected_family is not None else None,
             "selected_tag_id": int(selected.tag_id) if selected is not None else None,
             "selected_size_m": selected_size if selected is not None else None,
         }
 
-        if selected is None:
+        if selected is None or selected_family is None:
             return None
 
         # pupil_apriltags 返回四个图像角点，后续根据真实尺寸解算 xyz 和姿态四元数。
@@ -115,6 +138,7 @@ class NestedTagTracker:
         )
 
         return TargetPose(
+            tag_family=selected_family.name,
             tag_id=int(selected.tag_id),
             tag_size_m=selected_size,
             corners=corners,

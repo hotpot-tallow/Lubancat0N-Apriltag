@@ -29,11 +29,18 @@ class CameraConfig:
 
 
 @dataclass(frozen=True)
-class AprilTagConfig:
-    """AprilTag 检测参数，tag_sizes_m 的单位是米。"""
+class AprilTagFamilyConfig:
+    """一个 AprilTag 家族及该家族中需要跟踪的标签尺寸。"""
 
-    family: str
+    name: str
     tag_sizes_m: Dict[int, float]
+
+
+@dataclass(frozen=True)
+class AprilTagConfig:
+    """AprilTag 检测参数；多个家族会分别检测后合并结果。"""
+
+    families: Tuple[AprilTagFamilyConfig, ...]
     nthreads: int
     quad_decimate: float
     quad_sigma: float
@@ -73,6 +80,37 @@ def _matrix3(value: Sequence[Sequence[float]]) -> Tuple[Tuple[float, float, floa
     return rows
 
 
+def _tag_sizes(value: Dict[str, float], family_name: str) -> Dict[int, float]:
+    sizes = {int(tag_id): float(size) for tag_id, size in value.items()}
+    if not sizes:
+        raise ValueError(f"apriltag family {family_name} must configure at least one tag size")
+    if any(tag_id < 0 for tag_id in sizes):
+        raise ValueError(f"apriltag family {family_name} contains a negative tag id")
+    if any(size <= 0.0 for size in sizes.values()):
+        raise ValueError(f"apriltag family {family_name} contains a non-positive tag size")
+    return sizes
+
+
+def _tag_families(value: dict) -> Tuple[AprilTagFamilyConfig, ...]:
+    raw_families = value.get("families")
+    if raw_families is None:
+        name = str(value.get("family", "tag36h11"))
+        return (AprilTagFamilyConfig(name, _tag_sizes(value["tag_sizes_m"], name)),)
+
+    if not isinstance(raw_families, list) or not raw_families:
+        raise ValueError("apriltag.families must be a non-empty list")
+
+    families = []
+    seen_names = set()
+    for item in raw_families:
+        name = str(item["name"])
+        if name in seen_names:
+            raise ValueError(f"duplicate apriltag family: {name}")
+        seen_names.add(name)
+        families.append(AprilTagFamilyConfig(name, _tag_sizes(item["tag_sizes_m"], name)))
+    return tuple(families)
+
+
 def load_config(path: Union[str, Path]) -> AppConfig:
     """从 JSON 文件加载配置，并转换成带类型的 dataclass。"""
     with Path(path).open("r", encoding="utf-8") as fp:
@@ -83,8 +121,6 @@ def load_config(path: Union[str, Path]) -> AppConfig:
     mavlink = raw["mavlink"]
     transform = raw["transform"]
 
-    # JSON 的 key 只能可靠地当字符串读入，这里转成 int 方便和检测到的 tag_id 匹配。
-    tag_sizes = {int(tag_id): float(size) for tag_id, size in apriltag["tag_sizes_m"].items()}
     return AppConfig(
         camera=CameraConfig(
             device=camera.get("device", 0),
@@ -100,8 +136,7 @@ def load_config(path: Union[str, Path]) -> AppConfig:
             cy=float(camera["cy"]),
         ),
         apriltag=AprilTagConfig(
-            family=apriltag.get("family", "tag36h11"),
-            tag_sizes_m=tag_sizes,
+            families=_tag_families(apriltag),
             nthreads=max(1, int(apriltag.get("nthreads", 2))),
             quad_decimate=float(apriltag.get("quad_decimate", 2.0)),
             quad_sigma=float(apriltag.get("quad_sigma", 0.0)),

@@ -26,6 +26,7 @@ class PoseEstimate:
 class TargetPose:
     """一次 AprilTag 检测得到的完整位姿结果。"""
 
+    tag_family: str
     tag_id: int
     tag_size_m: float
     corners: Tuple[Point2, Point2, Point2, Point2]

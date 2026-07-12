@@ -73,7 +73,7 @@ def main() -> None:
             if sender is None:
                 payload = landing_target_payload(pose, config.mavlink.target_num)
                 print(
-                    f"LANDING_TARGET id={pose.tag_id} "
+                    f"LANDING_TARGET family={pose.tag_family} id={pose.tag_id} "
                     f"target_num={payload.target_num} frame={payload.frame} "
                     f"angle_x={payload.angle_x:+.4f} angle_y={payload.angle_y:+.4f} "
                     f"x={payload.x:+.3f} y={payload.y:+.3f} z={payload.z:+.3f} "

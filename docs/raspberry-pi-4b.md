@@ -64,10 +64,28 @@ cp config/pi4b.example.json config/pi4b.json
 - Camera Module 2 的第 0 个相机。
 - `1280x960@30` 的 YUV420 图像，只把灰度 Y 平面交给 AprilTag。
 - `nthreads=3`，给取流、PnP 和系统保留一个 CPU 核心。
+- 外层 `tagCustom48h12 ID 0` 与内层 `tag36h11 ID 1`，同时出现时选择物理尺寸更大的标签。
 - `/dev/serial0@115200` 连接飞控。
 
 模板里的 `fx=1060`、`fy=1060`、`cx=640`、`cy=480` 只是根据标称视场角得到的
 启动近似值。它们只能用于检查识别方向和大致距离，实飞前必须用最终分辨率重新标定。
+
+`tagCustom48h12` 是 AprilTag 3 原生为递归标签提供的家族。官方图片：
+
+- [tagCustom48h12 ID 0](https://github.com/AprilRobotics/apriltag-imgs/blob/master/tagCustom48h12/tag48_12_00000.png)
+- [tag36h11 ID 1](https://github.com/AprilRobotics/apriltag-imgs/blob/master/tag36h11/tag36_11_00001.png)
+
+缩放打印时不能插值或模糊像素边界。内层标签及其白色留白必须完全放在外层标签的中心孔洞内，不能覆盖 `tagCustom48h12` 的数据格。`tag_sizes_m` 填检测角点之间的实际距离，不是纸张外沿尺寸。
+
+官方PNG的尺寸比例需要单独换算：`tagCustom48h12` 的检测边界为6格、完整图案为10格；`tag36h11` 的检测边界为8格、含白边的完整图案为10格。因此模板中的尺寸对应：
+
+- 外层检测尺寸 `0.5m`：`tagCustom48h12` 完整图案宽约 `0.5 * 10 / 6 = 0.833m`。
+- 外层中心孔洞宽约 `0.5 * 2 / 6 = 0.167m`。
+- 内层检测尺寸 `0.128m`：`tag36h11` 含白边完整宽约 `0.128 * 10 / 8 = 0.160m`，可以放入该孔洞。
+
+如果实际打印尺寸不同，必须按同一比例重新填写两个 `tag_sizes_m`，否则PnP距离会按比例出错。
+
+多家族在当前 `pupil_apriltags` 封装下需要分别执行检测，耗时大约是单家族的两倍。树莓派4B建议先使用 `quad_decimate=2.0`，再根据 `detect_ms` 和远距离丢失率调整。
 
 ## 5. 分层测试
 

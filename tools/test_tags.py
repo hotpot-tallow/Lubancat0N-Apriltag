@@ -38,7 +38,7 @@ def draw_pose(frame, pose: TargetPose, fps: float, detect_ms: float, stats) -> N
     cv2.circle(frame, (center_x, center_y), 4, (0, 0, 255), -1)
 
     lines = [
-        f"id={pose.tag_id} size={pose.tag_size_m:.3f}m px={pose.tag_pixel_width:.1f}",
+        f"{pose.tag_family} id={pose.tag_id} size={pose.tag_size_m:.3f}m px={pose.tag_pixel_width:.1f}",
         f"body x={pose.x_body:+.3f} y={pose.y_body:+.3f} z={pose.z_body:+.3f}m",
         f"dist={pose.distance_m:.3f}m expect_z={pose.expected_z_m:.3f}m margin={pose.decision_margin:.1f}",
     ]
@@ -128,19 +128,23 @@ def main() -> None:
                 # 定时打印一次，headless 模式下主要看这里的 id/size/px/dist。
                 last_print_time = now
                 if pose is None:
+                    raw_details = ",".join(stats.get("raw_details", ())) or "-"
                     print(
                         f"no tag fps={fps:.1f} detect_ms={detect_ms:.1f} "
-                        f"raw={stats.get('raw_count', 0)} accepted={stats.get('accepted_count', 0)}"
+                        f"raw={stats.get('raw_count', 0)} accepted={stats.get('accepted_count', 0)} "
+                        f"candidates={raw_details}"
                     )
                 else:
+                    raw_details = ",".join(stats.get("raw_details", ())) or "-"
                     print(
-                        f"id={pose.tag_id} size={pose.tag_size_m:.3f}m "
+                        f"family={pose.tag_family} id={pose.tag_id} size={pose.tag_size_m:.3f}m "
                         f"px={pose.tag_pixel_width:.1f} expect_z={pose.expected_z_m:.3f} "
                         f"cam=({pose.x_cam:+.3f},{pose.y_cam:+.3f},{pose.z_cam:+.3f}) "
                         f"body=({pose.x_body:+.3f},{pose.y_body:+.3f},{pose.z_body:+.3f}) "
                         f"q=({pose.q_body[0]:+.3f},{pose.q_body[1]:+.3f},{pose.q_body[2]:+.3f},{pose.q_body[3]:+.3f}) "
                         f"dist={pose.distance_m:.3f} margin={pose.decision_margin:.1f} "
-                        f"fps={fps:.1f} detect_ms={detect_ms:.1f} raw={stats.get('raw_count', 0)}"
+                        f"fps={fps:.1f} detect_ms={detect_ms:.1f} raw={stats.get('raw_count', 0)} "
+                        f"candidates={raw_details}"
                     )
 
             if args.headless:
