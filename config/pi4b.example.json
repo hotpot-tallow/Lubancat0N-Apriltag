@@ -1,20 +1,20 @@
 {
   "camera": {
     "device": 0,
-    "backend": "v4l2",
+    "backend": "picamera2",
     "fourcc": "",
     "buffer_size": 1,
-    "width": 1920,
-    "height": 1080,
+    "width": 1280,
+    "height": 960,
     "fps": 30,
-    "fx": 1800.0,
-    "fy": 1350.0,
-    "cx": 960.0,
-    "cy": 540.0
+    "fx": 1060.0,
+    "fy": 1060.0,
+    "cx": 640.0,
+    "cy": 480.0
   },
   "apriltag": {
     "family": "tag36h11",
-    "nthreads": 2,
+    "nthreads": 3,
     "tag_sizes_m": {
       "0": 0.5,
       "1": 0.128,
@@ -28,7 +28,7 @@
     "min_decision_margin": 8.0
   },
   "mavlink": {
-    "connection": "/dev/ttyS8",
+    "connection": "/dev/serial0",
     "baud": 115200,
     "source_system": 42,
     "source_component": 191,

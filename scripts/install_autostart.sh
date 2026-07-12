@@ -68,7 +68,7 @@ chmod +x "${PROJECT_DIR}/scripts/run_landing_target.sh"
 # 生成 systemd 服务文件：开机启动、崩溃自动重启、附加摄像头/串口权限组。
 cat > "${SERVICE_FILE}" <<SERVICE
 [Unit]
-Description=LubanCat AprilTag LANDING_TARGET sender
+Description=AprilTag LANDING_TARGET sender
 After=multi-user.target systemd-udev-settle.service
 Wants=multi-user.target systemd-udev-settle.service
 

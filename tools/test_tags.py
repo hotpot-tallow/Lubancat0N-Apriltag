@@ -146,15 +146,20 @@ def main() -> None:
             if args.headless:
                 continue
 
+            display_frame = frame
+            if frame.ndim == 2:
+                # Picamera2 检测路径保持灰度，只在需要本地预览时转换成 BGR 方便画彩色标注。
+                display_frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+
             # 有窗口时，把识别结果画到图像上实时查看。
             if pose is None:
-                draw_no_tag(frame, fps, detect_ms, stats)
+                draw_no_tag(display_frame, fps, detect_ms, stats)
             else:
-                draw_pose(frame, pose, fps, detect_ms, stats)
+                draw_pose(display_frame, pose, fps, detect_ms, stats)
 
-            preview = frame
+            preview = display_frame
             if args.preview_scale != 1.0:
-                preview = cv2.resize(frame, None, fx=args.preview_scale, fy=args.preview_scale)
+                preview = cv2.resize(display_frame, None, fx=args.preview_scale, fy=args.preview_scale)
             cv2.imshow("AprilTag test", preview)
             key = cv2.waitKey(1) & 0xFF
             if key in (27, ord("q")):

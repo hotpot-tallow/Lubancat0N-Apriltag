@@ -32,7 +32,7 @@ class NestedTagTracker:
         tag_config = config.apriltag
         self.detector = Detector(
             families=tag_config.family,
-            nthreads=2,
+            nthreads=tag_config.nthreads,
             quad_decimate=tag_config.quad_decimate,
             quad_sigma=tag_config.quad_sigma,
             refine_edges=tag_config.refine_edges,
@@ -42,7 +42,15 @@ class NestedTagTracker:
 
     def detect(self, frame) -> Optional[TargetPose]:
         """识别一帧图像；识别失败返回 None，识别成功返回 TargetPose。"""
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if frame.ndim == 2:
+            # Picamera2 后端直接返回 YUV420 的 Y 平面，不需要再次转换或复制。
+            gray = frame
+        elif frame.ndim == 3 and frame.shape[2] == 3:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        elif frame.ndim == 3 and frame.shape[2] == 4:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGRA2GRAY)
+        else:
+            raise ValueError(f"unsupported camera frame shape: {frame.shape}")
 
         # 这里只让 pupil_apriltags 做角点检测，位姿由 pose.py 统一计算。
         detections = self.detector.detect(gray, estimate_tag_pose=False)

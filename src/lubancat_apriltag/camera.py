@@ -13,6 +13,11 @@ import numpy as np
 
 from .config import CameraConfig
 
+try:
+    from picamera2 import Picamera2
+except ImportError:  # Picamera2 only exists on Raspberry Pi OS.
+    Picamera2 = None
+
 
 def _fourcc_text(value: float) -> str:
     """把 OpenCV 返回的 FOURCC 整数转换成人能读懂的编码名。"""
@@ -38,6 +43,11 @@ def _backend_id(name: str) -> int:
 def _is_gstreamer_pipeline(config: CameraConfig) -> bool:
     """判断当前 device 是否是一整条 GStreamer 管线字符串。"""
     return config.backend.lower() in ("gstreamer", "gst") and isinstance(config.device, str)
+
+
+def _is_picamera2(config: CameraConfig) -> bool:
+    """判断是否使用 Raspberry Pi 官方 Picamera2 摄像头栈。"""
+    return config.backend.lower() in ("picamera2", "picam2")
 
 
 def _apply_camera_options(cap: cv2.VideoCapture, config: CameraConfig, use_optional: bool) -> None:
@@ -78,6 +88,88 @@ def _open_raw_camera(config: CameraConfig) -> cv2.VideoCapture:
         cap.release()
 
     raise RuntimeError(f"cannot open camera: {config.device}")
+
+
+class Picamera2Camera:
+    """用 Picamera2 读取 YUV420，并只返回适合 AprilTag 的灰度 Y 平面。"""
+
+    def __init__(self, config: CameraConfig) -> None:
+        if Picamera2 is None:
+            raise RuntimeError(
+                "Picamera2 is not installed; run: "
+                "sudo apt install -y python3-picamera2 --no-install-recommends"
+            )
+
+        self.config = config
+        self.width = int(config.width)
+        self.height = int(config.height)
+        self.fps = float(config.fps)
+        self._camera = None
+        self._opened = False
+
+        try:
+            camera_num = int(config.device)
+            self._camera = Picamera2(camera_num)
+            controls = {"FrameRate": self.fps} if self.fps > 0.0 else {}
+            camera_config = self._camera.create_video_configuration(
+                main={"size": (self.width, self.height), "format": "YUV420"},
+                controls=controls,
+                buffer_count=4,
+                queue=True,
+            )
+            self._camera.configure(camera_config)
+            stream = self._camera.stream_configuration("main")
+            self.width, self.height = (int(value) for value in stream["size"])
+            self._camera.start()
+            # 给自动曝光和白平衡留出几帧稳定时间。
+            time.sleep(0.5)
+            self._opened = True
+        except Exception:
+            self.release()
+            raise
+
+    def read(self) -> Tuple[bool, object]:
+        """读取最近的 YUV420 帧，并返回不做颜色转换的灰度 Y 平面。"""
+        if self._camera is None or not self._opened:
+            return False, None
+        try:
+            yuv = self._camera.capture_array("main")
+        except Exception as exc:
+            print(f"picamera2 read failed: {exc}")
+            return False, None
+
+        if yuv.ndim != 2 or yuv.shape[0] < self.height or yuv.shape[1] < self.width:
+            print(f"unexpected picamera2 YUV420 frame shape: {yuv.shape}")
+            return False, None
+        return True, yuv[: self.height, : self.width]
+
+    def get(self, prop_id: int) -> float:
+        """兼容 cv2.VideoCapture.get，供调试工具显示实际参数。"""
+        if prop_id == cv2.CAP_PROP_FRAME_WIDTH:
+            return float(self.width)
+        if prop_id == cv2.CAP_PROP_FRAME_HEIGHT:
+            return float(self.height)
+        if prop_id == cv2.CAP_PROP_FPS:
+            return self.fps
+        if prop_id == cv2.CAP_PROP_FOURCC:
+            return float(cv2.VideoWriter_fourcc(*"Y800"))
+        return 0.0
+
+    def isOpened(self) -> bool:
+        return self._opened
+
+    def release(self) -> None:
+        """停止摄像头并释放独占的 Camera Module。"""
+        camera = self._camera
+        self._camera = None
+        self._opened = False
+        if camera is None:
+            return
+        try:
+            camera.stop()
+        except RuntimeError:
+            pass
+        camera.close()
 
 
 class ResilientCamera:
@@ -468,8 +560,10 @@ class GstLaunchCamera:
 def open_camera(config: CameraConfig, read_timeout_s: float = 2.0):
     """打开摄像头。
 
-    V4L2 直连模式保留后台线程超时保护；GStreamer 管线模式用子进程隔离 C 层阻塞。
+    Picamera2 直接输出灰度；V4L2 保留后台线程超时保护；GStreamer 用独立进程取流。
     """
+    if _is_picamera2(config):
+        return Picamera2Camera(config)
     if _is_gstreamer_pipeline(config):
         return GstLaunchCamera(config, read_timeout_s=read_timeout_s)
     return ResilientCamera(config, read_timeout_s=read_timeout_s)

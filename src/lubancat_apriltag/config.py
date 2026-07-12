@@ -34,6 +34,7 @@ class AprilTagConfig:
 
     family: str
     tag_sizes_m: Dict[int, float]
+    nthreads: int
     quad_decimate: float
     quad_sigma: float
     refine_edges: int
@@ -101,6 +102,7 @@ def load_config(path: Union[str, Path]) -> AppConfig:
         apriltag=AprilTagConfig(
             family=apriltag.get("family", "tag36h11"),
             tag_sizes_m=tag_sizes,
+            nthreads=max(1, int(apriltag.get("nthreads", 2))),
             quad_decimate=float(apriltag.get("quad_decimate", 2.0)),
             quad_sigma=float(apriltag.get("quad_sigma", 0.0)),
             refine_edges=int(apriltag.get("refine_edges", 1)),

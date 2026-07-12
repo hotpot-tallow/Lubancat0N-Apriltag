@@ -5,3 +5,4 @@ __pycache__/
 camera_test.jpg
 config/*.json
 !config/example_config.json
+!config/pi4b.example.json

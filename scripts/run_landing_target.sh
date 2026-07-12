@@ -66,9 +66,13 @@ with open(sys.argv[1], "r", encoding="utf-8") as fp:
     cfg = json.load(fp)
 
 camera_device = cfg["camera"].get("device", "")
+camera_backend = str(cfg["camera"].get("backend", "")).lower()
 mavlink_device = str(cfg["mavlink"].get("connection", ""))
 
-if isinstance(camera_device, int):
+if camera_backend in ("picamera2", "picam2"):
+    # Picamera2 通过 libcamera/media devices 自动发现相机，不对应固定的 /dev/videoN。
+    camera_path = ""
+elif isinstance(camera_device, int):
     camera_path = f"/dev/video{camera_device}"
 else:
     camera_text = str(camera_device)

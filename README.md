@@ -1,6 +1,10 @@
-# LubanCat 0N AprilTag Landing Target
+# AprilTag Landing Target for LubanCat 0N and Raspberry Pi 4B
 
-鲁班猫 0N 读取摄像头画面，识别嵌套 `tag36h11` AprilTag，并向 ArduPilot 飞控发送 MAVLink `LANDING_TARGET` 消息。
+鲁班猫 0N 或 Raspberry Pi 4B 读取摄像头画面，识别嵌套 `tag36h11` AprilTag，
+并向 ArduPilot 飞控发送 MAVLink `LANDING_TARGET` 消息。
+
+Raspberry Pi 4B + Camera Module 2 使用 Picamera2 灰度取流，迁移步骤见
+[`docs/raspberry-pi-4b.md`](docs/raspberry-pi-4b.md)。
 
 当前默认嵌套码尺寸：
 
