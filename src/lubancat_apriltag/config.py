@@ -40,7 +40,7 @@ class AprilTagFamilyConfig:
 
 @dataclass(frozen=True)
 class AprilTagConfig:
-    """AprilTag 检测参数；多个家族会分别检测后合并结果。"""
+    """AprilTag 检测参数；多个家族共用一次四边形搜索。"""
 
     families: Tuple[AprilTagFamilyConfig, ...]
     nthreads: int

@@ -17,8 +17,8 @@ from .pose import (
 )
 
 
-def _build_detector(family, tag_config):
-    """创建可控制纠错表大小的检测器，避免大码族耗尽内存。"""
+def _build_detector(families, tag_config):
+    """Build one detector for all configured families with bounded code tables."""
     # pupil_apriltags 把 bits_corrected 硬编码为 2。先用很小的 tag16h5 初始化
     # Python 封装，再清除它并按配置纠错位数挂载目标家族。
     detector = Detector(
@@ -39,19 +39,22 @@ def _build_detector(family, tag_config):
         destroy.restype = None
         destroy(old_family)
 
-    creator = getattr(detector.libc, f"{family.name}_create")
-    creator.restype = family_pointer_type
-    family_pointer = creator()
-    if family.max_codes is not None:
-        available_codes = int(family_pointer.contents.ncodes)
-        family_pointer.contents.ncodes = min(family.max_codes, available_codes)
-    detector.libc.apriltag_detector_add_family_bits(
-        detector.tag_detector_ptr,
-        family_pointer,
-        family.bits_corrected,
-    )
-    detector.tag_families = {family.name: family_pointer}
-    detector.params["families"] = [family.name]
+    detector.tag_families = {}
+    detector.params["families"] = []
+    for family in families:
+        creator = getattr(detector.libc, f"{family.name}_create")
+        creator.restype = family_pointer_type
+        family_pointer = creator()
+        if family.max_codes is not None:
+            available_codes = int(family_pointer.contents.ncodes)
+            family_pointer.contents.ncodes = min(family.max_codes, available_codes)
+        detector.libc.apriltag_detector_add_family_bits(
+            detector.tag_detector_ptr,
+            family_pointer,
+            family.bits_corrected,
+        )
+        detector.tag_families[family.name] = family_pointer
+        detector.params["families"].append(family.name)
     return detector
 
 
@@ -70,14 +73,10 @@ class NestedTagTracker:
             "selected_size_m": None,
         }
         tag_config = config.apriltag
-        # 每个家族使用独立检测器，既能混合家族，也能分别限制纠错表内存。
-        self.detectors = tuple(
-            (
-                family,
-                _build_detector(family, tag_config),
-            )
-            for family in tag_config.families
-        )
+        # A shared detector extracts quads once, then decodes them against every
+        # configured family. Per-family correction bits and code limits remain intact.
+        self.families = {family.name: family for family in tag_config.families}
+        self.detector = _build_detector(tag_config.families, tag_config)
 
     def detect(self, frame) -> Optional[TargetPose]:
         """识别一帧图像；识别失败返回 None，识别成功返回 TargetPose。"""
@@ -93,8 +92,12 @@ class NestedTagTracker:
 
         # 这里只让 pupil_apriltags 做角点检测，位姿由 pose.py 统一计算。
         detections = []
-        for family, detector in self.detectors:
-            for detection in detector.detect(gray, estimate_tag_pose=False):
+        for detection in self.detector.detect(gray, estimate_tag_pose=False):
+            family_name = detection.tag_family
+            if isinstance(family_name, bytes):
+                family_name = family_name.decode("utf-8")
+            family = self.families.get(str(family_name))
+            if family is not None:
                 detections.append((family, detection))
 
         raw_details = tuple(

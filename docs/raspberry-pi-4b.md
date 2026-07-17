@@ -85,7 +85,7 @@ cp config/pi4b.example.json config/pi4b.json
 
 如果实际打印尺寸不同，必须按同一比例重新填写两个 `tag_sizes_m`，否则PnP距离会按比例出错。
 
-多家族在当前 `pupil_apriltags` 封装下需要分别执行检测，耗时大约是单家族的两倍。树莓派4B建议先使用 `quad_decimate=2.0`，再根据 `detect_ms` 和远距离丢失率调整。
+程序绕过 `pupil_apriltags` 只能从字符串初始化一个家族的限制，把多个家族直接挂载到同一个底层检测器。一帧图像只执行一次四边形搜索，再对候选四边形进行多家族解码。树莓派4B建议先使用 `quad_decimate=2.0`，再根据 `detect_ms` 和远距离丢失率调整。
 
 `tagCustom48h12` 包含四万多个合法码，直接为整个家族构造2位纠错表可能占用数GB内存并长时间卡在初始化阶段。模板设置 `max_codes=10`，只加载和识别该家族的 ID `0～9`，因此两个家族都可以使用 `bits_corrected=2`。配置的标签 ID 必须小于对应家族的 `max_codes`。全局 `max_hamming` 只负责过滤已经返回的检测结果。
 
